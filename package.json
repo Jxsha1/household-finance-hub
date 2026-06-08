@@ -1,0 +1,16 @@
+{
+  "name": "household-finance-hub",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.1.0",
+    "@astrojs/tailwind": "^6.0.0",
+    "astro": "^5.1.0",
+    "tailwindcss": "^3.4.1"
+  }
+}
