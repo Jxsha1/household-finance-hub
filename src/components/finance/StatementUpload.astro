@@ -1,0 +1,83 @@
+---
+---
+<div class="bg-white border border-sky-100/40 rounded-2xl p-5 shadow-sm">
+  <div class="mb-4">
+    <h3 class="text-sm font-bold text-slate-700">Statement Extraction</h3>
+    <p class="text-xs text-slate-400 mt-0.5">Upload a bank PDF to parse transactions locally without server fees</p>
+  </div>
+
+  <div
+    id="drop-zone"
+    class="w-full h-32 border-2 border-dashed border-sky-200 hover:border-sky-400 bg-sky-50/30 rounded-xl flex flex-col items-center justify-center gap-2 p-4 transition-colors cursor-pointer select-none touch-manipulation"
+  >
+    <div class="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center text-sky-600">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+      </svg>
+    </div>
+    <div class="text-center">
+      <p class="text-xs font-bold text-slate-600">Tap to select or drop bank PDF</p>
+      <p id="upload-status" class="text-[10px] text-slate-400 mt-0.5">Supports standard credit card or current accounts</p>
+    </div>
+    <input type="file" id="file-input" accept="application/pdf" class="hidden" />
+  </div>
+
+  <div id="preview-container" class="mt-4 pt-3 border-t border-slate-100 hidden">
+    <p class="text-xs font-bold text-slate-500 mb-2">Parsed Text Preview</p>
+    <div id="text-preview" class="w-full max-h-24 overflow-y-auto bg-slate-50 border border-slate-100 rounded-lg p-2.5 text-[10px] font-mono text-slate-600 whitespace-pre-wrap"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js" integrity="sha512-0H7S70ZEdZ0KbyK82S7bZ6F+M8XUv97uA1Q36T+CcyM/WpSAt9F8T94z40U0L8Zf4a6E/YcW48h/S7L56eA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+  // Initialise the PDF.js global worker configuration
+  const pdfjsLib = window['pdfjs-dist/build/pdf']
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js'
+
+  const dropZone = document.getElementById('drop-zone')
+  const fileInput = document.getElementById('file-input') as HTMLInputElement
+  const uploadStatus = document.getElementById('upload-status')
+
+  // Manage click triggers for touch screens
+  dropZone?.addEventListener('click', () => fileInput?.click())
+
+  // Visual drag states
+  dropZone?.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    dropZone.classList.add('bg-sky-100/50', 'border-sky-400')
+  })
+
+  dropZone?.addEventListener('dragleave', () => {
+    dropZone.classList.remove('bg-sky-100/50', 'border-sky-400')
+  })
+
+  dropZone?.addEventListener('drop', (e) => {
+    e.preventDefault()
+    dropZone.classList.remove('bg-sky-100/50', 'border-sky-400')
+    const files = e.dataTransfer?.files
+    if (files && files.length > 0) {
+      handleFileSelection(files[0])
+    }
+  })
+
+  fileInput?.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement
+    const files = target.files
+    if (files && files.length > 0) {
+      handleFileSelection(files[0])
+    }
+  })
+
+  function handleFileSelection(file: File) {
+    if (file.type !== 'application/pdf') {
+      if (uploadStatus) uploadStatus.textContent = 'Invalid format. Please supply a PDF file'
+      return
+    }
+    if (uploadStatus) uploadStatus.textContent = `Selected: ${file.name}`
+    
+    // Dispatch custom event carrying the raw file object for Step 5.2 logic
+    const event = new CustomEvent('statement-selected', { detail: { file } })
+    window.dispatchEvent(event)
+  }
+</script>
