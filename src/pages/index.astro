@@ -1,15 +1,34 @@
 ---
+import MainLayout from '../layouts/MainLayout.astro'
+import BudgetToggle from '../components/finance/BudgetToggle.astro'
+import TransactionList from '../components/finance/TransactionList.astro'
+import StatementUpload from '../components/finance/StatementUpload.astro'
+
+// Mock transaction items to instantly check our responsive UI states
+const mockTransactions = [
+  { id: '1', description: 'Supermarket Groceries', amount: -4250, date: 'Today', created_by_user_id: 'user_1' },
+  { id: '2', description: 'Household Utility Bill', amount: -11500, date: 'Yesterday', created_by_user_id: 'user_2' },
+  { id: '3', description: 'Shared Account Top Up', amount: 25000, date: '01 June 2026', created_by_user_id: 'user_1' }
+]
 ---
-<html lang="en-GB">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Household Finance Hub</title>
-  </head>
-  <body class="bg-slate-50 text-slate-900 flex items-center justify-center min-h-screen">
-    <main class="text-center">
-      <h1 class="text-3xl font-bold text-sky-900">Household Finance Hub</h1>
-      <p class="text-slate-600 mt-2">Initial configuration complete</p>
-    </main>
-  </body>
-</html>
+
+<MainLayout title="Household Dashboard">
+  <div slot="header-actions" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100/80 px-2.5 py-1 rounded-full">
+    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Cloud Connected</span>
+  </div>
+
+  <div class="space-y-5">
+    
+    <BudgetToggle currentMode="cash_flow" />
+
+    <StatementUpload />
+
+    <TransactionList transactions={mockTransactions} />
+    
+  </div>
+</MainLayout>
+
+<script>
+  import '../lib/pdfParser.ts'
+</script>
