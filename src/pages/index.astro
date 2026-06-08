@@ -1,10 +1,10 @@
 ---
 import MainLayout from '../layouts/MainLayout.astro'
 import BudgetToggle from '../components/finance/BudgetToggle.astro'
+import MonthYearSelector from '../components/finance/MonthYearSelector.astro'
 import TransactionList from '../components/finance/TransactionList.astro'
 import StatementUpload from '../components/finance/StatementUpload.astro'
 
-// Mock transaction items to instantly check our responsive UI states
 const mockTransactions = [
   { id: '1', description: 'Supermarket Groceries', amount: -4250, date: 'Today', created_by_user_id: 'user_1' },
   { id: '2', description: 'Household Utility Bill', amount: -11500, date: 'Yesterday', created_by_user_id: 'user_2' },
@@ -20,6 +20,8 @@ const mockTransactions = [
 
   <div class="space-y-5">
     
+    <MonthYearSelector />
+    
     <BudgetToggle currentMode="cash_flow" />
 
     <StatementUpload />
@@ -31,4 +33,10 @@ const mockTransactions = [
 
 <script>
   import '../lib/pdfParser.ts'
+
+  // Catch the custom date event parameters to fetch the filtered history later
+  window.addEventListener('date-filter-change', (event: any) => {
+    const { month, year } = event.detail
+    console.log(`Updating dashboard scope to target month context: ${month} within year: ${year}`)
+  })
 </script>
