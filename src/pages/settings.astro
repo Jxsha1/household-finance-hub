@@ -1,0 +1,29 @@
+---
+import MainLayout from '../layouts/MainLayout.astro'
+import Card from '../components/ui/Card.astro'
+import Button from '../components/ui/Button.astro'
+---
+
+<MainLayout title="System Settings">
+  <div class="space-y-4">
+    <Card>
+      <div class="mb-4">
+        <h2 class="text-sm font-bold text-slate-700">Device Notifications</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Receive alerts regarding household budget warnings</p>
+      </div>
+      <Button id="push-toggle" variant="primary">
+        Enable Mobile Push Notifications
+      </Button>
+    </Card>
+
+    <Card>
+      <div class="mb-2">
+        <h2 class="text-sm font-bold text-slate-700">Account Access</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Logged in as a shared household participant</p>
+      </div>
+      <Button variant="danger" className="mt-2">
+        Sign Out Securely
+      </Button>
+    </Card>
+  </div>
+</MainLayout>
