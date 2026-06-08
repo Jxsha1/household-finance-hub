@@ -1,0 +1,21 @@
+{
+  "name": "Household Finance Hub",
+  "short_name": "FinanceHub",
+  "description": "A shared household budget and transaction tracker designed for mobile devices.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#BAE6FD",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
