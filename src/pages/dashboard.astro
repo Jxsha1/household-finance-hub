@@ -1,0 +1,31 @@
+---
+import MainLayout from '../layouts/MainLayout.astro'
+import BudgetToggle from '../components/finance/BudgetToggle.astro'
+import MonthYearSelector from '../components/finance/MonthYearSelector.astro'
+import TransactionList from '../components/finance/TransactionList.astro'
+import StatementUpload from '../components/finance/StatementUpload.astro'
+
+const mockTransactions = [
+  { id: '1', description: 'Supermarket Groceries', amount: -4250, date: 'Today', created_by_user_id: 'user_1' },
+  { id: '2', description: 'Household Utility Bill', amount: -11500, date: 'Yesterday', created_by_user_id: 'user_2' },
+  { id: '3', description: 'Shared Account Top Up', amount: 25000, date: '01 June 2026', created_by_user_id: 'user_1' }
+]
+---
+
+<MainLayout title="Household Dashboard">
+  <div slot="header-actions" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100/80 px-2.5 py-1 rounded-full">
+    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Cloud Connected</span>
+  </div>
+
+  <div class="space-y-5">
+    <MonthYearSelector />
+    <BudgetToggle currentMode="cash_flow" />
+    <StatementUpload />
+    <TransactionList transactions={mockTransactions} />
+  </div>
+</MainLayout>
+
+<script>
+  import '../lib/pdfParser.ts'
+</script>
