@@ -1,0 +1,86 @@
+---
+interface Props {
+  currentMode: 'cash_flow' | 'zero_based';
+}
+
+const { currentMode = 'cash_flow' } = Astro.props;
+---
+
+<div class="bg-white border border-sky-100/40 rounded-2xl p-5 shadow-sm">
+  <div class="mb-4">
+    <h3 class="text-sm font-bold text-slate-700">Budgeting Strategy</h3>
+    <p class="text-xs text-slate-400 mt-0.5">Toggle how your surplus household income is calculated</p>
+  </div>
+
+  <div class="grid grid-cols-2 gap-2 bg-slate-100/80 p-1 rounded-xl">
+    <button
+      id="toggle-cash-flow"
+      class={`h-11 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 select-none touch-manipulation ${
+        currentMode === 'cash_flow'
+          ? 'bg-white text-sky-900 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      Cash Flow
+    </button>
+    <button
+      id="toggle-zero-based"
+      class={`h-11 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 select-none touch-manipulation ${
+        currentMode === 'zero_based'
+          ? 'bg-white text-sky-900 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      Zero-Based
+    </button>
+  </div>
+
+  <div class="mt-4 pt-3 border-t border-slate-100">
+    <div id="info-cash-flow" class={`space-y-1 ${currentMode === 'cash_flow' ? 'block' : 'hidden'}`}>
+      <span class="inline-block text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-md">
+        Income − Expenses = Spare Cash
+      </span>
+      <p class="text-xs text-slate-400 leading-relaxed pt-1">
+        A highly flexible model that prioritises visibility over tracking. Ideal for households wanting to know exactly what is left over at the end of the month.
+      </p>
+    </div>
+
+    <div id="info-zero-based" class={`space-y-1 ${currentMode === 'zero_based' ? 'block' : 'hidden'}`}>
+      <span class="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+        Every Pound Has a Job
+      </span>
+      <p class="text-xs text-slate-400 leading-relaxed pt-1">
+        A structured model where income minus allocated envelopes equals zero. Ideal for accelerating debt reduction targets and precise savings milestones.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Simple client side visibility handler for instant user feedback
+  const btnCashFlow = document.getElementById('toggle-cash-flow');
+  const btnZeroBased = document.getElementById('toggle-zero-based');
+  const infoCashFlow = document.getElementById('info-cash-flow');
+  const infoZeroBased = document.getElementById('info-zero-based');
+
+  function setMode(mode: 'cash_flow' | 'zero_based') {
+    if (mode === 'cash_flow') {
+      btnCashFlow?.classList.add('bg-white', 'text-sky-900', 'shadow-sm');
+      btnCashFlow?.classList.remove('text-slate-500');
+      btnZeroBased?.classList.remove('bg-white', 'text-sky-900', 'shadow-sm');
+      btnZeroBased?.classList.add('text-slate-500');
+      infoCashFlow?.classList.remove('hidden');
+      infoZeroBased?.classList.add('hidden');
+    } else {
+      btnZeroBased?.classList.add('bg-white', 'text-sky-900', 'shadow-sm');
+      btnZeroBased?.classList.remove('text-slate-500');
+      btnCashFlow?.classList.remove('bg-white', 'text-sky-900', 'shadow-sm');
+      btnCashFlow?.classList.add('text-slate-500');
+      infoZeroBased?.classList.remove('hidden');
+      infoCashFlow?.classList.add('hidden');
+    }
+  }
+
+  btnCashFlow?.addEventListener('click', () => setMode('cash_flow'));
+  btnZeroBased?.addEventListener('click', () => setMode('zero_based'));
+</script>
