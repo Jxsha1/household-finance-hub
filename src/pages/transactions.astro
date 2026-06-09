@@ -1,18 +1,94 @@
----
-import MainLayout from '../layouts/MainLayout.astro'
-import Card from '../components/ui/Card.astro'
----
+import type { APIRoute } from 'astro'
 
-<MainLayout title="Historical Activity">
-  <div class="space-y-4">
-    <Card>
-      <div class="mb-2">
-        <h2 class="text-sm font-bold text-slate-700">Transaction History</h2>
-        <p class="text-xs text-slate-400 mt-0.5">A complete audit ledger of your shared household cash flow</p>
-      </div>
-      <div class="bg-slate-50 border border-slate-100 rounded-xl p-6 text-center text-xs text-slate-400 font-medium">
-        Detailed database lookup filters and transaction editing modules will load here during Phase 4
-      </div>
-    </Card>
-  </div>
-</MainLayout>
+export const POST: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB
+  const user = (locals as any).user
+
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database connection missing' }), { status: 500 })
+  }
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 })
+  }
+
+  try {
+    const { amount, date, description } = await request.json()
+    if (!amount || !date || !description) {
+      return new Response(JSON.stringify({ error: 'Missing required transaction fields' }), { status: 400 })
+    }
+
+    const transactionId = crypto.randomUUID()
+    const logId = crypto.randomUUID()
+
+    // Execute as an atomic batch transaction on Cloudflare D1
+    await db.batch([
+      db.prepare('INSERT INTO transactions (id, household_id, amount, date, description, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(transactionId, user.householdId, amount, date, description, user.id),
+      db.prepare('INSERT INTO audit_logs (id, table_name, record_id, action, user_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(logId, 'transactions', transactionId, 'CREATE', user.id)
+    ])
+
+    return new Response(JSON.stringify({ success: true, id: transactionId }), { status: 201 })
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+  }
+}
+
+export const PUT: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB
+  const user = (locals as any).user
+
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database connection missing' }), { status: 500 })
+  }
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 })
+  }
+
+  try {
+    const { id, amount, date, description } = await request.json()
+    if (!id || !amount || !date || !description) {
+      return new Response(JSON.stringify({ error: 'Missing mutation parameters' }), { status: 400 })
+    }
+
+    const logId = crypto.randomUUID()
+
+    await db.batch([
+      db.prepare('UPDATE transactions SET amount = ?, date = ?, description = ? WHERE id = ? AND household_id = ?')
+        .bind(amount, date, description, id, user.householdId),
+      db.prepare('INSERT INTO audit_logs (id, table_name, record_id, action, user_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(logId, 'transactions', id, 'UPDATE', user.id)
+    ])
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 })
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+  }
+}
+
+export const DELETE: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB
+  const user = (locals as any).user
+
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database connection missing' }), { status: 500 })
+  }
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 })
+  }
+
+  try {
+    const { id } = await request.json()
+    if (!id) {
+      return new Response(JSON.stringify({ error: 'Missing target transaction ID' }), { status: 400 })
+    }
+
+    const logId = crypto.randomUUID()
+
+    await db.batch([
+      db.prepare('DELETE FROM transactions WHERE id = ? AND household_id = ?')
+        .bind(id, user.householdId),
+      db.prepare('INSERT INTO audit_logs (id, table_name, record_id, action, user_id) VALUES (?, ?, ?,
