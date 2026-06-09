@@ -1,0 +1,107 @@
+---
+// Frontend user authentication gate template
+---
+
+<!DOCTYPE html>
+<html lang="en-GB" class="h-full bg-slate-50">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#BAE6FD" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <title>Sign In | Household Finance Hub</title>
+  </head>
+  <body class="h-full font-sans antialiased text-slate-800 flex items-center justify-center p-4 relative overflow-hidden select-none">
+    
+    <div class="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+      <div class="absolute -top-40 -left-40 w-80 h-80 rounded-full bg-sky-100/60 blur-3xl"></div>
+      <div class="absolute bottom-20 -right-20 w-80 h-80 rounded-full bg-emerald-50/70 blur-3xl"></div>
+    </div>
+
+    <div class="w-full max-w-md bg-white/90 backdrop-blur-sm rounded-3xl border border-sky-100/60 p-6 shadow-xl shadow-slate-100/40">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-300 to-emerald-300 flex items-center justify-center shadow-inner mx-auto mb-3">
+          <span class="text-white text-lg font-bold">£</span>
+        </div>
+        <h1 class="text-xl font-bold text-slate-700 tracking-tight">Welcome Back</h1>
+        <p class="text-xs text-slate-400 mt-1">Sign in to manage your shared household budget</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div id="error-banner" class="hidden bg-rose-50 border border-rose-100 text-rose-800 text-xs font-semibold p-3.5 rounded-xl text-center"></div>
+
+        <div class="relative">
+          <label for="email" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            required
+            placeholder="name@example.com"
+            class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all touch-manipulation"
+          />
+        </div>
+
+        <div class="relative">
+          <label for="password" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
+          <input
+            type="password"
+            id="password"
+            required
+            placeholder="••••••••"
+            class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all touch-manipulation"
+          />
+        </div>
+
+        <button
+          type="submit"
+          id="submit-btn"
+          class="w-full h-12 px-6 bg-sky-200 text-sky-900 hover:bg-sky-300 active:scale-[0.98] font-semibold text-sm tracking-wide rounded-xl flex items-center justify-center transition-all shadow-sm shadow-sky-100 touch-manipulation cursor-pointer"
+        >
+          Sign In Securely
+        </button>
+      </form>
+    </div>
+
+    <script>
+      const form = document.getElementById('login-form') as HTMLFormElement
+      const errorBanner = document.getElementById('error-banner')
+      const submitBtn = document.getElementById('submit-btn')
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        if (!errorBanner || !submitBtn) return
+
+        errorBanner.classList.add('hidden')
+        errorBanner.textContent = ''
+        submitBtn.textContent = 'Verifying credentials...'
+        ;(submitBtn as HTMLButtonElement).disabled = true
+
+        const email = (document.getElementById('email') as HTMLInputElement).value
+        const password = (document.getElementById('password') as HTMLInputElement).value
+
+        try {
+          const response = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Authentication failed')
+          }
+
+          // Direct the verified user straight to the live operational interface
+          window.location.href = '/dashboard'
+        } catch (err: any) {
+          errorBanner.textContent = err.message
+          errorBanner.classList.remove('hidden')
+          submitBtn.textContent = 'Sign In Securely'
+          ;(submitBtn as HTMLButtonElement).disabled = false
+        }
+      })
+    </script>
+  </body>
+</html>
