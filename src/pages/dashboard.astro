@@ -5,11 +5,21 @@ import MonthYearSelector from '../components/finance/MonthYearSelector.astro'
 import TransactionList from '../components/finance/TransactionList.astro'
 import StatementUpload from '../components/finance/StatementUpload.astro'
 
-const mockTransactions = [
-  { id: '1', description: 'Supermarket Groceries', amount: -4250, date: 'Today', created_by_user_id: 'user_1' },
-  { id: '2', description: 'Household Utility Bill', amount: -11500, date: 'Yesterday', created_by_user_id: 'user_2' },
-  { id: '3', description: 'Shared Account Top Up', amount: 25000, date: '01 June 2026', created_by_user_id: 'user_1' }
-]
+const db = (Astro.locals as any).runtime?.env?.DB
+const user = (Astro.locals as any).user
+
+if (!db || !user) {
+  return Astro.redirect('/login')
+}
+
+// Fetch the household configuration parameters and recent ledger transactions via parallel promises
+const [householdResult, transactionsResult] = await Promise.all([
+  db.prepare('SELECT budget_mode FROM households WHERE id = ?').bind(user.householdId).first(),
+  db.prepare('SELECT id, description, amount, date, created_by_user_id FROM transactions WHERE household_id = ? ORDER BY date DESC, created_at DESC LIMIT 20').bind(user.householdId).all()
+])
+
+const budgetMode = (householdResult?.budget_mode as 'cash_flow' | 'zero_based') || 'cash_flow'
+const transactions = (transactionsResult?.results as any[]) || []
 ---
 
 <MainLayout title="Household Dashboard">
@@ -19,13 +29,23 @@ const mockTransactions = [
   </div>
 
   <div class="space-y-5">
+    
     <MonthYearSelector />
-    <BudgetToggle currentMode="cash_flow" />
+    
+    <BudgetToggle currentMode={budgetMode} />
+
     <StatementUpload />
-    <TransactionList transactions={mockTransactions} />
+
+    <TransactionList transactions={transactions} />
+    
   </div>
 </MainLayout>
 
 <script>
   import '../lib/pdfParser.ts'
+
+  window.addEventListener('date-filter-change', (event: any) => {
+    const { month, year } = event.detail
+    console.log(`Refetch triggering for date window context: ${month} in year: ${year}`)
+  })
 </script>
