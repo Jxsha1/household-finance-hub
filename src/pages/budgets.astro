@@ -46,13 +46,20 @@ const formatCurrency = (pence: number) => {
             <label for="bank_name" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Source Bank Account</label>
             <select id="bank_name" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 appearance-none focus:outline-none focus:ring-2 focus:ring-sky-200">
               <option value="Barclays">Barclays</option>
+              <option value="Halifax">Halifax</option>
               <option value="HSBC">HSBC</option>
-              <option value="NatWest">NatWest</option>
               <option value="Lloyds">Lloyds</option>
-              <option value="Santander">Santander</option>
               <option value="Monzo">Monzo</option>
+              <option value="NatWest">NatWest</option>
+              <option value="Santander">Santander</option>
+              <option value="CUSTOM">Other / Add New...</option>
             </select>
           </div>
+        </div>
+
+        <div id="custom-bank-container" class="relative hidden">
+          <label for="custom_bank_name" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Custom Bank Name</label>
+          <input type="text" id="custom_bank_name" placeholder="e.g. TSB / Nationwide" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
         </div>
 
         <div class="relative">
@@ -105,6 +112,21 @@ const formatCurrency = (pence: number) => {
   const form = document.getElementById('recurring-form');
   const errorBanner = document.getElementById('form-error-banner');
   const submitBtn = document.getElementById('submit-commitment-btn');
+  const bankSelect = document.getElementById('bank_name') as HTMLSelectElement;
+  const customBankContainer = document.getElementById('custom-bank-container');
+  const customBankInput = document.getElementById('custom_bank_name') as HTMLInputElement;
+
+  bankSelect?.addEventListener('change', () => {
+    if (bankSelect.value === 'CUSTOM') {
+      customBankContainer?.classList.remove('hidden');
+      customBankInput.required = true;
+      customBankInput.focus();
+    } else {
+      customBankContainer?.classList.add('hidden');
+      customBankInput.required = false;
+      customBankInput.value = '';
+    }
+  });
 
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -115,12 +137,24 @@ const formatCurrency = (pence: number) => {
     (submitBtn as HTMLButtonElement).disabled = true;
     
     const direction = (document.getElementById('direction') as HTMLSelectElement).value;
-    const bank_name = (document.getElementById('bank_name') as HTMLSelectElement).value;
+    let bank_name = bankSelect.value;
+    if (bank_name === 'CUSTOM') {
+      bank_name = customBankInput.value.trim();
+    }
+    
     const name = (document.getElementById('name') as HTMLInputElement).value;
     const rawAmount = parseFloat((document.getElementById('amount') as HTMLInputElement).value);
     const day_of_month = parseInt((document.getElementById('day_of_month') as HTMLInputElement).value, 10);
     
     const amount = Math.round(rawAmount * 100);
+
+    if (!bank_name) {
+      errorBanner.textContent = 'Please provide a valid bank name';
+      errorBanner.classList.remove('hidden');
+      submitBtn.textContent = 'Save Recurring Commitment';
+      (submitBtn as HTMLButtonElement).disabled = false;
+      return;
+    }
 
     try {
       const response = await fetch('/api/recurring', {
@@ -135,7 +169,6 @@ const formatCurrency = (pence: number) => {
         throw new Error(data.error || 'Failed to save recurring payment option');
       }
 
-      // Refresh the application layout to render the database output items on screen
       window.location.reload();
     } catch (err: any) {
       errorBanner.textContent = err.message;
