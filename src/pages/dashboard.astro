@@ -29,9 +29,6 @@ const [householdResult, transactionsResult, recurringResult] = await Promise.all
   db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?Setting)').bind(user.householdId, filterEnd, filterStart).all()
 ])
 
-// Quick correction helper to ensure the query line reads correctly without typos:
-// db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)')
-
 const budgetMode = (householdResult?.budget_mode as 'cash_flow' | 'zero_based') || 'cash_flow'
 const transactions = (transactionsResult?.results as any[]) || []
 const activeFixedPayments = (recurringResult?.results as any[]) || []
