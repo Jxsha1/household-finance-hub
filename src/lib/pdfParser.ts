@@ -1,4 +1,3 @@
-// This helper runs completely inside the browser viewport to scrape text layout blocks from a credit statement PDF
 export async function extractTextFromPdf(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer()
   
@@ -15,7 +14,6 @@ export async function extractTextFromPdf(file: File): Promise<string> {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
     
-    // Concatenate individual text string elements captured across the statement viewport layer
     const pageText = textContent.items
       .map((item: any) => item.str)
       .join(' ')
@@ -26,7 +24,41 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   return fullText
 }
 
-// Global window event registration to intercept file uploads and run the asynchronous processing pipeline
+// Scrape targeted credit card fields using case-insensitive contextual boundaries
+export function parseCreditCardMetrics(text: string): { interestRate: string; minimumPayment: string } {
+  const interestRateRegexes = [
+    /(?:purchase|interest|annual)?\s*rate\s*(?:of)?\s*(\d+(?:\.\d+)?\s*%)/i,
+    /(?:apr)\s*(?:is)?\s*(\d+(?:\.\d+)?\s*%)/i,
+    /(\d+(?:\.\d+)?\s*%)\s*(?:variable)?\s*(?:per\s*annum|p\.a\.)/i
+  ]
+
+  const minimumPaymentRegexes = [
+    /(?:minimum|min)\s*(?:monthly)?\s*(?:payment|amount)\s*(?:due)?\s*(?:of)?\s*(?:£)?\s*(\d+(?:\.\d{2})?)/i,
+    /(?:payment\s*due)\s*(?:£)?\s*(\d+(?:\.\d{2})?)/i
+  ]
+
+  let interestRate = 'Not detected'
+  let minimumPayment = 'Not detected'
+
+  for (const regex of interestRateRegexes) {
+    const match = text.match(regex)
+    if (match && match[1]) {
+      interestRate = match[1].trim()
+      break
+    }
+  }
+
+  for (const regex of minimumPaymentRegexes) {
+    const match = text.match(regex)
+    if (match && match[1]) {
+      minimumPayment = `£${parseFloat(match[1]).toFixed(2)}`
+      break
+    }
+  }
+
+  return { interestRate, minimumPayment }
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('statement-selected', async (event: any) => {
     const file = event.detail?.file
@@ -42,20 +74,21 @@ if (typeof window !== 'undefined') {
       
       const parsedText = await extractTextFromPdf(file)
       
-      if (previewContainer && extractedRate && extractedMinimum) {
-        extractedRate.textContent = 'Analysing rate text...'
-        extractedMinimum.textContent = 'Analysing balance terms...'
-        previewContainer.classList.remove('hidden')
-      }
+      if (uploadStatus) uploadStatus.textContent = 'Analysing financial metrics...'
       
-      // Dispatch a secondary custom event containing the raw scraped string text block
-      // This sets up the exact execution context required for our regex token scrapers in Step 6.3
+      const { interestRate, minimumPayment } = parseCreditCardMetrics(parsedText)
+      
+      if (extractedRate) extractedRate.textContent = interestRate
+      if (extractedMinimum) extractedMinimum.textContent = minimumPayment
+      if (previewContainer) previewContainer.classList.remove('hidden')
+      
+      // Dispatch the payload details downstream for cloud ledger syncing in the next step
       const textReadyEvent = new CustomEvent('statement-text-ready', {
-        detail: { text: parsedText }
+        detail: { text: parsedText, interestRate, minimumPayment }
       })
       window.dispatchEvent(textReadyEvent)
       
-      if (uploadStatus) uploadStatus.textContent = 'Text extraction complete'
+      if (uploadStatus) uploadStatus.textContent = 'Analysis complete'
     } catch (error: any) {
       if (uploadStatus) uploadStatus.textContent = 'Error parsing credit document wrapper'
       console.error(error)
