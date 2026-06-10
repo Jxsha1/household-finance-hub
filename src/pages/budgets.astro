@@ -10,9 +10,9 @@ if (!db || !user) {
   return Astro.redirect('/login')
 }
 
-// Extract existing saved recurring streams to print inside the interactive table list
+// Extract historical and operational standing commitments from the cloud database node
 const { results } = await db.prepare(
-  'SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? ORDER BY direction DESC, day_of_month ASC'
+  'SELECT id, name, amount, direction, bank_name, day_of_month, start_date, end_date FROM recurring_payments WHERE household_id = ? ORDER BY end_date ASC, direction DESC, day_of_month ASC'
 ).bind(user.householdId).all()
 
 const recurringPayments = results || []
@@ -27,11 +27,11 @@ const formatCurrency = (pence: number) => {
     
     <Card>
       <div class="mb-4">
-        <h2 class="text-sm font-bold text-slate-700">Add Recurring Standing Order / Direct Debit</h2>
+        <h2 id="form-title" class="text-sm font-bold text-slate-700">Add Recurring Standing Order / Direct Debit</h2>
         <p class="text-xs text-slate-400 mt-0.5">Manually log fixed household salary influxes or bank outgoings</p>
       </div>
 
-      <form id="recurring-form" class="space-y-3">
+      <form id="recurring-form" data-mode="create" data-edit-id="" class="space-y-3">
         <div id="form-error-banner" class="hidden bg-rose-50 border border-rose-100 text-rose-800 text-xs font-semibold p-3 rounded-xl text-center"></div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -64,7 +64,7 @@ const formatCurrency = (pence: number) => {
 
         <div class="relative">
           <label for="name" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Payment Description</label>
-          <input type="text" id="name" required placeholder="e.g. Council Tax / Monthly Salary" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
+          <input type="text" id="name" required placeholder="e.g. Council Tax / Rent" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -78,7 +78,21 @@ const formatCurrency = (pence: number) => {
           </div>
         </div>
 
-        <Button type="submit" id="submit-commitment-btn" variant="secondary">Save Recurring Commitment</Button>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="relative">
+            <label for="start_date" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Start Date</label>
+            <input type="date" id="start_date" required class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
+          </div>
+          <div class="relative">
+            <label for="end_date_input" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">End Date (Optional)</label>
+            <input type="date" id="end_date_input" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <Button type="submit" id="submit-commitment-btn" variant="secondary" className="flex-1">Save Recurring Commitment</Button>
+          <button type="button" id="cancel-edit-btn" class="hidden px-4 bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold text-xs rounded-xl transition-all">Cancel</button>
+        </div>
       </form>
     </Card>
 
@@ -90,18 +104,52 @@ const formatCurrency = (pence: number) => {
       {recurringPayments.length === 0 ? (
         <p class="text-xs text-slate-400 text-center py-4">No fixed monthly recurring items registered yet</p>
       ) : (
-        <div class="space-y-2">
-          {recurringPayments.map((p: any) => (
-            <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between text-xs font-medium">
-              <div>
-                <p class="font-bold text-slate-700">{p.name}</p>
-                <p class="text-[10px] text-slate-400 mt-0.5">Bank: {p.bank_name} · Day {p.day_of_month} of month</p>
+        <div class="space-y-2.5">
+          {recurringPayments.map((p: any) => {
+            const hasEnded = p.end_date && new Date(p.end_date) < new Date()
+            return (
+              <div class={`bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col justify-between gap-3 text-xs transition-opacity ${hasEnded ? 'opacity-40' : ''}`}>
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="font-bold text-slate-700">
+                      {p.name}
+                      {hasEnded && <span class="ml-1.5 text-[9px] font-bold uppercase text-rose-700 bg-rose-50 border border-rose-100 px-1 py-0.5 rounded">Ended</span>}
+                    </p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Bank: {p.bank_name} · Day {p.day_of_month} · From: {p.start_date}{p.end_date ? ` to ${p.end_date}` : ''}</p>
+                  </div>
+                  <span class={p.direction === 'IN' ? 'text-emerald-600 font-bold' : 'text-slate-600 font-bold'}>
+                    {p.direction === 'IN' ? '+' : '−'}{formatCurrency(p.amount)}
+                  </span>
+                </div>
+
+                <div class="flex gap-2 border-t border-slate-100/70 pt-2">
+                  <button 
+                    type="button"
+                    class="edit-btn text-[10px] font-bold text-sky-700 bg-sky-50 hover:bg-sky-100/80 px-2.5 py-1 rounded-md transition-colors"
+                    data-id={p.id}
+                    data-name={p.name}
+                    data-amount={(p.amount / 100).toFixed(2)}
+                    data-direction={p.direction}
+                    data-bank={p.bank_name}
+                    data-day={p.day_of_month}
+                    data-start={p.start_date}
+                    data-end={p.end_date || ''}
+                  >
+                    Modify
+                  </button>
+                  {!p.end_date && (
+                    <button 
+                      type="button"
+                      class="delete-btn text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100/80 px-2.5 py-1 rounded-md transition-colors"
+                      data-id={p.id}
+                    >
+                      Stop Payment
+                    </button>
+                  )}
+                </div>
               </div>
-              <span class={p.direction === 'IN' ? 'text-emerald-600 font-bold' : 'text-slate-600 font-bold'}>
-                {p.direction === 'IN' ? '+' : '−'}{formatCurrency(p.amount)}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </Card>
@@ -109,18 +157,26 @@ const formatCurrency = (pence: number) => {
 </MainLayout>
 
 <script>
-  const form = document.getElementById('recurring-form');
+  const form = document.getElementById('recurring-form') as HTMLFormElement;
+  const formTitle = document.getElementById('form-title');
   const errorBanner = document.getElementById('form-error-banner');
   const submitBtn = document.getElementById('submit-commitment-btn');
+  const cancelEditBtn = document.getElementById('cancel-edit-btn') as HTMLButtonElement;
   const bankSelect = document.getElementById('bank_name') as HTMLSelectElement;
   const customBankContainer = document.getElementById('custom-bank-container');
   const customBankInput = document.getElementById('custom_bank_name') as HTMLInputElement;
+
+  const startInput = document.getElementById('start_date') as HTMLInputElement;
+  if (startInput && !startInput.value) {
+    startInput.value = new Date().toISOString().split('T')[0];
+  }
+
+  const PRESET_BANKS = ['Barclays', 'Halifax', 'HSBC', 'Lloyds', 'Monzo', 'NatWest', 'Santander'];
 
   bankSelect?.addEventListener('change', () => {
     if (bankSelect.value === 'CUSTOM') {
       customBankContainer?.classList.remove('hidden');
       customBankInput.required = true;
-      customBankInput.focus();
     } else {
       customBankContainer?.classList.add('hidden');
       customBankInput.required = false;
@@ -128,14 +184,86 @@ const formatCurrency = (pence: number) => {
     }
   });
 
+  // Handle Edit selection mapping routines
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      if (!form || !formTitle || !cancelEditBtn) return;
+
+      formTitle.textContent = 'Amend Recurring Commitment';
+      form.setAttribute('data-mode', 'edit');
+      form.setAttribute('data-edit-id', target.getAttribute('data-id') || '');
+      cancelEditBtn.classList.remove('hidden');
+
+      (document.getElementById('direction') as HTMLSelectElement).value = target.getAttribute('data-direction') || 'OUT';
+      (document.getElementById('name') as HTMLInputElement).value = target.getAttribute('data-name') || '';
+      (document.getElementById('amount') as HTMLInputElement).value = target.getAttribute('data-amount') || '';
+      (document.getElementById('day_of_month') as HTMLInputElement).value = target.getAttribute('data-day') || '';
+      
+      const bank = target.getAttribute('data-bank') || '';
+      if (PRESET_BANKS.includes(bank)) {
+        bankSelect.value = bank;
+        customBankContainer?.classList.add('hidden');
+        customBankInput.required = false;
+      } else {
+        bankSelect.value = 'CUSTOM';
+        customBankContainer?.classList.remove('hidden');
+        customBankInput.required = true;
+        customBankInput.value = bank;
+      }
+
+      // Default the start date field box to today for the new amended variant chain
+      startInput.value = new Date().toISOString().split('T')[0];
+      (document.getElementById('end_date_input') as HTMLInputElement).value = target.getAttribute('data-end') || '';
+      
+      window.scrollTo({ top: 0, behaviour: 'smooth' });
+    });
+  });
+
+  // Trigger automated soft delete configurations
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const id = target.getAttribute('data-id');
+      const stopDate = prompt('Enter the final end date for this payment structure (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+      
+      if (!id || stopDate === null) return;
+
+      try {
+        const response = await fetch('/api/recurring', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, end_date: stopDate })
+        });
+        if (!response.ok) throw new Error('Could not record cancellation status');
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    });
+  });
+
+  cancelEditBtn?.addEventListener('click', () => {
+    form.reset();
+    form.setAttribute('data-mode', 'create');
+    form.setAttribute('data-edit-id', '');
+    if (formTitle) formTitle.textContent = 'Add Recurring Standing Order / Direct Debit';
+    cancelEditBtn.classList.add('hidden');
+    customBankContainer?.classList.add('hidden');
+    startInput.value = new Date().toISOString().split('T')[0];
+  });
+
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!errorBanner || !submitBtn) return;
 
     errorBanner.classList.add('hidden');
-    submitBtn.textContent = 'Storing commitment details...';
+    submitBtn.textContent = 'Saving structural timeline updates...';
     (submitBtn as HTMLButtonElement).disabled = true;
     
+    const mode = form.getAttribute('data-mode');
+    const editId = form.getAttribute('data-edit-id');
+
     const direction = (document.getElementById('direction') as HTMLSelectElement).value;
     let bank_name = bankSelect.value;
     if (bank_name === 'CUSTOM') {
@@ -145,29 +273,22 @@ const formatCurrency = (pence: number) => {
     const name = (document.getElementById('name') as HTMLInputElement).value;
     const rawAmount = parseFloat((document.getElementById('amount') as HTMLInputElement).value);
     const day_of_month = parseInt((document.getElementById('day_of_month') as HTMLInputElement).value, 10);
+    const start_date = startInput.value;
     
     const amount = Math.round(rawAmount * 100);
 
-    if (!bank_name) {
-      errorBanner.textContent = 'Please provide a valid bank name';
-      errorBanner.classList.remove('hidden');
-      submitBtn.textContent = 'Save Recurring Commitment';
-      (submitBtn as HTMLButtonElement).disabled = false;
-      return;
-    }
+    const payload: any = { name, amount, direction, bank_name, day_of_month, start_date };
+    if (mode === 'edit') payload.id = editId;
 
     try {
       const response = await fetch('/api/recurring', {
-        method: 'POST',
+        method: mode === 'edit' ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, amount, direction, bank_name, day_of_month })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save recurring payment option');
-      }
+      if (!response.ok) throw new Error(data.error || 'Failed to submit commitment timeline rows');
 
       window.location.reload();
     } catch (err: any) {
