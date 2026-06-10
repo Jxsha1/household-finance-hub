@@ -55,6 +55,7 @@ const isForced = user?.passwordChangeRequired === 1 || Astro.url.searchParams.ge
             <h2 class="text-sm font-bold text-slate-700">Device Notifications</h2>
             <p class="text-xs text-slate-400 mt-0.5">Receive alerts regarding household budget warnings</p>
           </div>
+          <div id="push-status-message" class="hidden text-xs font-semibold p-3 mb-3 rounded-xl text-center"></div>
           <Button id="push-toggle" variant="primary">
             Enable Mobile Push Notifications
           </Button>
@@ -79,6 +80,91 @@ const isForced = user?.passwordChangeRequired === 1 || Astro.url.searchParams.ge
   const passwordMessage = document.getElementById('password-message');
   const passwordSubmitBtn = document.getElementById('password-submit-btn');
   const signOutBtn = document.getElementById('sign-out-btn');
+  const pushToggleBtn = document.getElementById('push-toggle') as HTMLButtonElement;
+  const pushStatusMessage = document.getElementById('push-status-message');
+
+  // Placeholder VAPID key pair target required for push registration handshakes
+  const VAPID_PUBLIC_KEY = 'BEl62OhSreZREf9661s2K6Z909Yc30n_n4O_G1TzGvWz_jE_vQc_qP_s49_X8';
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // Update visual state flags for existing push subscription settings
+  if (pushToggleBtn && typeof window !== 'undefined' && 'Notification' in window) {
+    if (Notification.permission === 'granted') {
+      pushToggleBtn.textContent = 'Notifications Enabled';
+      pushToggleBtn.disabled = true;
+    }
+  }
+
+  pushToggleBtn?.addEventListener('click', async () => {
+    if (!pushStatusMessage || !pushToggleBtn) return;
+
+    pushStatusMessage.classList.add('hidden');
+    pushToggleBtn.textContent = 'Requesting system links...';
+    pushToggleBtn.disabled = true;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      pushStatusMessage.textContent = 'Push communication profiles are unsupported on this system web browser';
+      pushStatusMessage.className = 'text-xs font-semibold p-3 mb-3 bg-rose-50 text-rose-800 border border-rose-100 rounded-xl text-center';
+      pushStatusMessage.classList.remove('hidden');
+      pushToggleBtn.textContent = 'Enable Mobile Push Notifications';
+      pushToggleBtn.disabled = false;
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('System subscription alert clearance turned down by user context');
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+
+      const rawKeyBytes = subscription.getKey('p256dh');
+      const rawAuthBytes = subscription.getKey('auth');
+
+      const payload = {
+        endpoint: subscription.endpoint,
+        p256dh: rawKeyBytes ? btoa(String.fromCharCode(...new Uint8Array(rawKeyBytes))) : '',
+        auth: rawAuthBytes ? btoa(String.fromCharCode(...new Uint8Array(rawAuthBytes))) : ''
+      };
+
+      const response = await fetch('/api/push-subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Cloud database sync rejected device endpoints');
+      }
+
+      pushStatusMessage.textContent = 'Device token verification complete. Web push linked.';
+      pushStatusMessage.className = 'text-xs font-semibold p-3 mb-3 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl text-center';
+      pushStatusMessage.classList.remove('hidden');
+      pushToggleBtn.textContent = 'Notifications Enabled';
+    } catch (err: any) {
+      pushStatusMessage.textContent = err.message;
+      pushStatusMessage.className = 'text-xs font-semibold p-3 mb-3 bg-rose-50 text-rose-800 border border-rose-100 rounded-xl text-center';
+      pushStatusMessage.classList.remove('hidden');
+      pushToggleBtn.textContent = 'Enable Mobile Push Notifications';
+      pushToggleBtn.disabled = false;
+    }
+  });
 
   passwordForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
