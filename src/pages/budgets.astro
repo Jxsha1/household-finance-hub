@@ -32,6 +32,8 @@ const formatCurrency = (pence: number) => {
       </div>
 
       <form id="recurring-form" class="space-y-3">
+        <div id="form-error-banner" class="hidden bg-rose-50 border border-rose-100 text-rose-800 text-xs font-semibold p-3 rounded-xl text-center"></div>
+
         <div class="grid grid-cols-2 gap-3">
           <div class="relative">
             <label for="direction" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Stream Type</label>
@@ -69,7 +71,7 @@ const formatCurrency = (pence: number) => {
           </div>
         </div>
 
-        <Button type="submit" variant="secondary">Save Recurring Committment</Button>
+        <Button type="submit" id="submit-commitment-btn" variant="secondary">Save Recurring Commitment</Button>
       </form>
     </Card>
 
@@ -101,9 +103,16 @@ const formatCurrency = (pence: number) => {
 
 <script>
   const form = document.getElementById('recurring-form');
-  
+  const errorBanner = document.getElementById('form-error-banner');
+  const submitBtn = document.getElementById('submit-commitment-btn');
+
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!errorBanner || !submitBtn) return;
+
+    errorBanner.classList.add('hidden');
+    submitBtn.textContent = 'Storing commitment details...';
+    (submitBtn as HTMLButtonElement).disabled = true;
     
     const direction = (document.getElementById('direction') as HTMLSelectElement).value;
     const bank_name = (document.getElementById('bank_name') as HTMLSelectElement).value;
@@ -111,11 +120,28 @@ const formatCurrency = (pence: number) => {
     const rawAmount = parseFloat((document.getElementById('amount') as HTMLInputElement).value);
     const day_of_month = parseInt((document.getElementById('day_of_month') as HTMLInputElement).value, 10);
     
-    // Convert pounds to integer pence values safely for sql accuracy
     const amount = Math.round(rawAmount * 100);
 
-    // Placeholder link to write api to be wired in the next step
-    console.log({ direction, bank_name, name, amount, day_of_month });
-    alert('Local capture complete. Refreshing interface pipeline');
+    try {
+      const response = await fetch('/api/recurring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, amount, direction, bank_name, day_of_month })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save recurring payment option');
+      }
+
+      // Refresh the application layout to render the database output items on screen
+      window.location.reload();
+    } catch (err: any) {
+      errorBanner.textContent = err.message;
+      errorBanner.classList.remove('hidden');
+      submitBtn.textContent = 'Save Recurring Commitment';
+      (submitBtn as HTMLButtonElement).disabled = false;
+    }
   });
 </script>
