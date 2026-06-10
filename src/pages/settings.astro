@@ -2,28 +2,127 @@
 import MainLayout from '../layouts/MainLayout.astro'
 import Card from '../components/ui/Card.astro'
 import Button from '../components/ui/Button.astro'
+
+const user = (Astro.locals as any).user
+const isForced = user?.passwordChangeRequired === 1 || Astro.url.searchParams.get('force') === '1'
 ---
 
 <MainLayout title="System Settings">
+  <div slot="header-actions" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100/80 px-2.5 py-1 rounded-full">
+    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Cloud Connected</span>
+  </div>
+
   <div class="space-y-4">
-    <Card>
-      <div class="mb-4">
-        <h2 class="text-sm font-bold text-slate-700">Device Notifications</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Receive alerts regarding household budget warnings</p>
+    {isForced && (
+      <div class="bg-rose-50 border border-rose-100 text-rose-900 text-xs font-semibold p-4 rounded-2xl text-center shadow-sm">
+        <p class="font-bold text-rose-800 text-sm mb-1">Password Change Required</p>
+        <p class="text-slate-500 font-medium leading-relaxed">This is your first login session. You must update your access credentials before you can browse the shared family dashboards.</p>
       </div>
-      <Button id="push-toggle" variant="primary">
-        Enable Mobile Push Notifications
-      </Button>
-    </Card>
+    )}
 
     <Card>
-      <div class="mb-2">
-        <h2 class="text-sm font-bold text-slate-700">Account Access</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Logged in as a shared household participant</p>
+      <div class="mb-4">
+        <h2 class="text-sm font-bold text-slate-700">Update Account Password</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Ensure your security profile remains completely uncompromised</p>
       </div>
-      <Button variant="danger" className="mt-2">
-        Sign Out Securely
-      </Button>
+
+      <form id="password-form" class="space-y-3">
+        <div id="password-message" class="hidden text-xs font-semibold p-3 rounded-xl text-center"></div>
+
+        <div class="relative">
+          <label for="new-password" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">New Secure Password</label>
+          <input
+            type="password"
+            id="new-password"
+            required
+            minlength="6"
+            placeholder="••••••••"
+            class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all touch-manipulation"
+          />
+        </div>
+
+        <Button type="submit" id="password-submit-btn" variant="secondary">
+          Save New Password
+        </Button>
+      </form>
     </Card>
+
+    {!isForced && (
+      <>
+        <Card>
+          <div class="mb-4">
+            <h2 class="text-sm font-bold text-slate-700">Device Notifications</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Receive alerts regarding household budget warnings</p>
+          </div>
+          <Button id="push-toggle" variant="primary">
+            Enable Mobile Push Notifications
+          </Button>
+        </Card>
+
+        <Card>
+          <div class="mb-2">
+            <h2 class="text-sm font-bold text-slate-700">Account Access</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Logged in as a shared household participant</p>
+          </div>
+          <Button id="sign-out-btn" variant="danger" className="mt-2">
+            Sign Out Securely
+          </Button>
+        </Card>
+      </>
+    )}
   </div>
 </MainLayout>
+
+<script>
+  const passwordForm = document.getElementById('password-form') as HTMLFormElement;
+  const passwordMessage = document.getElementById('password-message');
+  const passwordSubmitBtn = document.getElementById('password-submit-btn');
+  const signOutBtn = document.getElementById('sign-out-btn');
+
+  passwordForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!passwordMessage || !passwordSubmitBtn) return;
+
+    passwordMessage.classList.add('hidden');
+    passwordMessage.className = 'text-xs font-semibold p-3 rounded-xl text-center';
+    passwordSubmitBtn.textContent = 'Saving changes...';
+    (passwordSubmitBtn as HTMLButtonElement).disabled = true;
+
+    const newPassword = (document.getElementById('new-password') as HTMLInputElement).value;
+
+    try {
+      const response = await fetch('/api/user/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update credentials');
+      }
+
+      passwordMessage.textContent = 'Password updated successfully. Loading your dashboard...';
+      passwordMessage.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-100');
+      passwordMessage.classList.remove('hidden');
+
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1500);
+
+    } catch (err: any) {
+      passwordMessage.textContent = err.message;
+      passwordMessage.classList.add('bg-rose-50', 'text-rose-800', 'border', 'border-rose-100');
+      passwordMessage.classList.remove('hidden');
+      passwordSubmitBtn.textContent = 'Save New Password';
+      (passwordSubmitBtn as HTMLButtonElement).disabled = false;
+    }
+  });
+
+  signOutBtn?.addEventListener('click', async () => {
+    await fetch('/api/auth', { method: 'DELETE' });
+    window.location.href = '/login';
+  });
+</script>
