@@ -4,6 +4,7 @@ import BudgetToggle from '../components/finance/BudgetToggle.astro'
 import MonthYearSelector from '../components/finance/MonthYearSelector.astro'
 import TransactionList from '../components/finance/TransactionList.astro'
 import StatementUpload from '../components/finance/StatementUpload.astro'
+import Card from '../components/ui/Card.astro'
 
 const db = (Astro.locals as any).runtime?.env?.DB
 const user = (Astro.locals as any).user
@@ -12,14 +13,43 @@ if (!db || !user) {
   return Astro.redirect('/login')
 }
 
-// Fetch the household configuration parameters and recent ledger transactions via parallel promises
-const [householdResult, transactionsResult] = await Promise.all([
+// Extract selected timeline matrices from URL search parameters to run precision monthly sorting
+const url = Astro.url
+const selectedMonth = parseInt(url.searchParams.get('month') || new Date().getMonth().toString(), 10)
+const selectedYear = parseInt(url.searchParams.get('year') || new Date().getFullYear().toString(), 10)
+
+// Format the date boundaries for database filtering
+const targetMonthStr = String(selectedMonth + 1).padStart(2, '0')
+const filterStart = `${selectedYear}-${targetMonthStr}-01`
+const filterEnd = `${selectedYear}-${targetMonthStr}-31`
+
+const [householdResult, transactionsResult, recurringResult] = await Promise.all([
   db.prepare('SELECT budget_mode FROM households WHERE id = ?').bind(user.householdId).first(),
-  db.prepare('SELECT id, description, amount, date, created_by_user_id FROM transactions WHERE household_id = ? ORDER BY date DESC, created_at DESC LIMIT 20').bind(user.householdId).all()
+  db.prepare('SELECT id, description, amount, date, created_by_user_id FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC, created_at DESC').bind(user.householdId, filterStart, filterEnd).all(),
+  db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?).').bind(user.householdId, filterEnd, filterStart).all()
 ])
 
 const budgetMode = (householdResult?.budget_mode as 'cash_flow' | 'zero_based') || 'cash_flow'
 const transactions = (transactionsResult?.results as any[]) || []
+const activeFixedPayments = (recurringResult?.results as any[]) || []
+
+// Compute fluid overview metrics using transactional calculations
+let totalIncomePence = 0
+let totalExpensesPence = 0
+
+transactions.forEach(tx => {
+  if (tx.amount > 0) totalIncomePence += tx.amount
+  else totalExpensesPence += Math.abs(tx.amount)
+})
+
+activeFixedPayments.forEach(fp => {
+  if (fp.direction === 'IN') totalIncomePence += fp.amount
+  else totalExpensesPence += fp.amount
+})
+
+const totalIncome = (totalIncomePence / 100).toFixed(2)
+const totalExpenses = (totalExpensesPence / 100).toFixed(2)
+const residualSurplus = ((totalIncomePence - totalExpensesPence) / 100).toFixed(2)
 ---
 
 <MainLayout title="Household Dashboard">
@@ -31,8 +61,48 @@ const transactions = (transactionsResult?.results as any[]) || []
   <div class="space-y-5">
     
     <MonthYearSelector />
+
+    <div class="grid grid-cols-3 gap-2.5">
+      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
+        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Inflow</span>
+        <span class="text-xs font-black text-emerald-600 mt-1 block">£{totalIncome}</span>
+      </div>
+      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
+        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Outgoings</span>
+        <span class="text-xs font-black text-slate-600 mt-1 block">£{totalExpenses}</span>
+      </div>
+      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
+        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Surplus</span>
+        <span class={`text-xs font-black mt-1 block ${parseFloat(residualSurplus) >= 0 ? 'text-sky-600' : 'text-rose-600'}`}>£{residualSurplus}</span>
+      </div>
+    </div>
     
     <BudgetToggle currentMode={budgetMode} />
+
+    <Card>
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Fixed Monthly Commitments</h3>
+        <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Standing Orders</span>
+      </div>
+
+      {activeFixedPayments.length === 0 ? (
+        <p class="text-xs text-slate-400 text-center py-3">No active standing agreements linked for this period</p>
+      ) : (
+        <div class="space-y-2">
+          {activeFixedPayments.map(fp => (
+            <div class="flex items-center justify-between border-b border-slate-100/60 pb-2 last:border-none last:pb-0 text-xs">
+              <div>
+                <p class="font-bold text-slate-700">{fp.name}</p>
+                <p class="text-[9px] text-slate-400">Account: {fp.bank_name} · Due Day {fp.day_of_month}</p>
+              </div>
+              <span class={`font-mono font-bold ${fp.direction === 'IN' ? 'text-emerald-600' : 'text-slate-600'}`}>
+                {fp.direction === 'IN' ? '+' : '−'}£{(fp.amount / 100).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
 
     <StatementUpload />
 
@@ -44,8 +114,12 @@ const transactions = (transactionsResult?.results as any[]) || []
 <script>
   import '../lib/pdfParser.ts'
 
+  // Dynamic state listener to enforce page reloads when changing target calendar windows
   window.addEventListener('date-filter-change', (event: any) => {
     const { month, year } = event.detail
-    console.log(`Refetch triggering for date window context: ${month} in year: ${year}`)
+    const url = new URL(window.location.href)
+    url.searchParams.set('month', month)
+    url.searchParams.set('year', year)
+    window.location.href = url.toString()
   })
 </script>
