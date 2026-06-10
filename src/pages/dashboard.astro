@@ -26,7 +26,7 @@ const filterEnd = `${selectedYear}-${targetMonthStr}-31`
 const [householdResult, transactionsResult, recurringResult] = await Promise.all([
   db.prepare('SELECT budget_mode FROM households WHERE id = ?').bind(user.householdId).first(),
   db.prepare('SELECT id, description, amount, date, created_by_user_id FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC, created_at DESC').bind(user.householdId, filterStart, filterEnd).all(),
-  db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?Setting)').bind(user.householdId, filterEnd, filterStart).all()
+  db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ? )').bind(user.householdId, filterEnd, filterStart).all()
 ])
 
 const budgetMode = (householdResult?.budget_mode as 'cash_flow' | 'zero_based') || 'cash_flow'
