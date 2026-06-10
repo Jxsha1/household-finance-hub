@@ -1,4 +1,4 @@
-// This helper runs completely inside the browser to scrape text layout items from a PDF file wrapper
+// This helper runs completely inside the browser viewport to scrape text layout blocks from a credit statement PDF
 export async function extractTextFromPdf(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer()
   
@@ -15,7 +15,7 @@ export async function extractTextFromPdf(file: File): Promise<string> {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
     
-    // Concatenate individual text string elements captured from the viewport layer
+    // Concatenate individual text string elements captured across the statement viewport layer
     const pageText = textContent.items
       .map((item: any) => item.str)
       .join(' ')
@@ -26,29 +26,38 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   return fullText
 }
 
-// Global window event registration to intercept file uploads and print live data feedback
+// Global window event registration to intercept file uploads and run the asynchronous processing pipeline
 if (typeof window !== 'undefined') {
   window.addEventListener('statement-selected', async (event: any) => {
     const file = event.detail?.file
     if (!file) return
 
     const previewContainer = document.getElementById('preview-container')
-    const textPreview = document.getElementById('text-preview')
+    const extractedRate = document.getElementById('extracted-rate')
+    const extractedMinimum = document.getElementById('extracted-minimum')
     const uploadStatus = document.getElementById('upload-status')
 
     try {
-      if (uploadStatus) uploadStatus.textContent = 'Extracting data items locally...'
+      if (uploadStatus) uploadStatus.textContent = 'Extracting statement text locally...'
       
       const parsedText = await extractTextFromPdf(file)
       
-      if (textPreview && previewContainer) {
-        textPreview.textContent = parsedText.trim() || 'No clear text content blocks found inside this document'
+      if (previewContainer && extractedRate && extractedMinimum) {
+        extractedRate.textContent = 'Analysing rate text...'
+        extractedMinimum.textContent = 'Analysing balance terms...'
         previewContainer.classList.remove('hidden')
       }
       
-      if (uploadStatus) uploadStatus.textContent = 'Extraction complete'
+      // Dispatch a secondary custom event containing the raw scraped string text block
+      // This sets up the exact execution context required for our regex token scrapers in Step 6.3
+      const textReadyEvent = new CustomEvent('statement-text-ready', {
+        detail: { text: parsedText }
+      })
+      window.dispatchEvent(textReadyEvent)
+      
+      if (uploadStatus) uploadStatus.textContent = 'Text extraction complete'
     } catch (error: any) {
-      if (uploadStatus) uploadStatus.textContent = 'Error parsing document content'
+      if (uploadStatus) uploadStatus.textContent = 'Error parsing credit document wrapper'
       console.error(error)
     }
   })
