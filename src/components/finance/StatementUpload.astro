@@ -6,6 +6,25 @@
     <p class="text-xs text-slate-400 mt-0.5">Upload a card statement PDF to extract interest rates and minimum monthly steps locally</p>
   </div>
 
+  <div class="mb-4 relative">
+    <label for="statement-bank-name" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Credit Card Provider / Bank</label>
+    <select id="statement-bank-name" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 appearance-none focus:outline-none focus:ring-2 focus:ring-sky-200">
+      <option value="Barclays">Barclays</option>
+      <option value="Halifax">Halifax</option>
+      <option value="HSBC">HSBC</option>
+      <option value="Lloyds">Lloyds</option>
+      <option value="Monzo">Monzo</option>
+      <option value="NatWest">NatWest</option>
+      <option value="Santander">Santander</option>
+      <option value="CUSTOM">Other / Custom Card...</option>
+    </select>
+  </div>
+
+  <div id="statement-custom-bank-container" class="mb-4 relative hidden">
+    <label for="statement-custom-bank-input" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Custom Provider Name</label>
+    <input type="text" id="statement-custom-bank-input" placeholder="e.g. AMEX / MBNA" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200" />
+  </div>
+
   <div
     id="drop-zone"
     class="w-full h-32 border-2 border-dashed border-sky-200 hover:border-sky-400 bg-sky-50/30 rounded-xl flex flex-col items-center justify-center gap-2 p-4 transition-colors cursor-pointer select-none touch-manipulation"
@@ -23,6 +42,7 @@
   </div>
 
   <div id="preview-container" class="mt-4 pt-3 border-t border-slate-100 hidden">
+    <div id="sync-message" class="hidden text-xs font-semibold p-3 mb-3 rounded-xl text-center"></div>
     <p class="text-xs font-bold text-slate-500 mb-2">Extracted Financial Metrics</p>
     <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
       <div>
@@ -34,18 +54,53 @@
         <span id="extracted-minimum" class="font-mono font-bold text-slate-700">Detecting...</span>
       </div>
     </div>
+    
+    <button
+      id="sync-debt-btn"
+      type="button"
+      class="w-full h-11 mt-4 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 active:scale-[0.99] font-bold text-xs tracking-wide rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer touch-manipulation"
+    >
+      Sync Metrics to Debt Ledger
+    </button>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js" integrity="sha512-0H7S70ZEdZ0KbyK82S7bZ6F+M8XUv97uA1Q36T+CcyM/WpSAt9F8T94z40U0L8Zf4a6E/YcW48h/S7L56eA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script>
-  const pdfjsLib = window['pdfjs-dist/build/pdf']
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js'
+  // Initialise global script instances safely to prevent out-of-order build blocks crashing
+  if (typeof window !== 'undefined') {
+    const globalPdf = (window as any).pdfjsLib
+    if (globalPdf) {
+      globalPdf.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js'
+    }
+  }
 
   const dropZone = document.getElementById('drop-zone')
   const fileInput = document.getElementById('file-input') as HTMLInputElement
   const uploadStatus = document.getElementById('upload-status')
+  const bankSelect = document.getElementById('statement-bank-name') as HTMLSelectElement
+  const customBankContainer = document.getElementById('statement-custom-bank-container')
+  const customBankInput = document.getElementById('statement-custom-bank-input') as HTMLInputElement
+  const previewContainer = document.getElementById('preview-container')
+  const syncBtn = document.getElementById('sync-debt-btn')
+  const syncMessage = document.getElementById('sync-message')
+
+  let lastExtractedRate = 'Not detected'
+  let lastExtractedMinimum = 'Not detected'
+
+  bankSelect?.addEventListener('change', () => {
+    if (bankSelect.value === 'CUSTOM') {
+      customBankContainer?.classList.remove('hidden')
+      if (customBankInput) customBankInput.required = true
+    } else {
+      customBankContainer?.classList.add('hidden')
+      if (customBankInput) {
+        customBankInput.required = false
+        customBankInput.value = ''
+      }
+    }
+  })
 
   dropZone?.addEventListener('click', () => fileInput?.click())
 
@@ -81,8 +136,68 @@
       return
     }
     if (uploadStatus) uploadStatus.textContent = `Processing: ${file.name}`
+    if (syncMessage) {
+      syncMessage.classList.add('hidden')
+      syncMessage.textContent = ''
+    }
     
     const event = new CustomEvent('statement-selected', { detail: { file } })
     window.dispatchEvent(event)
   }
+
+  // Intercept text streams dispatched back from your client side parser layer
+  window.addEventListener('statement-text-ready', (event: any) => {
+    const { interestRate, minimumPayment } = event.detail
+    lastExtractedRate = interestRate || 'Not detected'
+    lastExtractedMinimum = minimumPayment || 'Not detected'
+  })
+
+  syncBtn?.addEventListener('click', async () => {
+    if (!syncBtn || !syncMessage) return
+
+    syncMessage.classList.add('hidden')
+    syncBtn.textContent = 'Saving metrics to cloud D1...'
+    ;(syncBtn as HTMLButtonElement).disabled = true
+
+    let debtName = bankSelect.value
+    if (debtName === 'CUSTOM') {
+      debtName = customBankInput.value.trim()
+    }
+
+    if (!debtName) {
+      syncMessage.textContent = 'Please select or type a valid bank name'
+      syncMessage.className = 'text-xs font-semibold p-3 mb-3 bg-rose-50 text-rose-800 border border-rose-100 rounded-xl text-center'
+      syncMessage.classList.remove('hidden')
+      syncBtn.textContent = 'Sync Metrics to Debt Ledger'
+      ;(syncBtn as HTMLButtonElement).disabled = false
+      return
+    }
+
+    try {
+      const response = await fetch('/api/debts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          debtName,
+          interestRate: lastExtractedRate,
+          minimumPayment: lastExtractedMinimum
+        })
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to synchronise ledger records')
+
+      syncMessage.textContent = `Successfully synchronised credit card parameters for ${debtName}`
+      syncMessage.className = 'text-xs font-semibold p-3 mb-3 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl text-center'
+      syncMessage.classList.remove('hidden')
+      syncBtn.textContent = 'Sync Metrics to Debt Ledger'
+      ;(syncBtn as HTMLButtonElement).disabled = false
+    } catch (err: any) {
+      syncMessage.textContent = err.message
+      syncMessage.className = 'text-xs font-semibold p-3 mb-3 bg-rose-50 text-rose-800 border border-rose-100 rounded-xl text-center'
+      syncMessage.classList.remove('hidden')
+      syncBtn.textContent = 'Sync Metrics to Debt Ledger'
+      ;(syncBtn as HTMLButtonElement).disabled = false
+    }
+  })
 </script>
