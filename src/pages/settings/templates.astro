@@ -68,12 +68,11 @@ const { results: templates } = await db.prepare(
 </MainLayout>
 
 <script>
-  let pdfEngine: any = null
   let activePdfPage: any = null
   let currentTargetMode: 'rate' | 'min' = 'rate'
 
   // Spatial alignment configurations to write directly into your D1 tables
-  const templateConfig = {
+  const templateConfig: Record<string, { x: number; y: number; w: number; h: number }> = {
     rate: { x: 0, y: 0, w: 0, h: 0 },
     min: { x: 0, y: 0, w: 0, h: 0 }
   }
@@ -91,19 +90,47 @@ const { results: templates } = await db.prepare(
   const modeMinBtn = document.getElementById('target-min-mode')
   const saveBtn = document.getElementById('save-template-btn')
 
+  // Dynamically load the core parser engine from your local repository folder origin paths
+  async function getPdfEngine() {
+    if (typeof window === 'undefined') return null
+
+    const globalEngine = (window as any).pdfjsLib
+    if (globalEngine) {
+      return globalEngine
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = '/vendor/pdf.js'
+
+      script.onload = () => {
+        const loadedEngine = (window as any).pdfjsLib
+        if (loadedEngine) {
+          loadedEngine.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.js'
+          resolve(loadedEngine)
+        } else {
+          reject(new Error('Local PDF engine failed to initialise correctly'))
+        }
+      }
+
+      script.onerror = () => {
+        reject(new Error('Failed to load local vendor script files from host origin'))
+      }
+
+      document.head.appendChild(script)
+    })
+  }
+
   loadSampleBtn?.addEventListener('click', () => fileInput?.click())
   fileInput?.addEventListener('change', async () => {
     const file = fileInput.files?.[0]
     if (!file || !canvas || !statusLabel || !workspace) return
 
-    statusLabel.textContent = 'Initialising parser component architecture...'
+    statusLabel.textContent = 'Initialising local parser engine components...'
     
     try {
-      if (!(window as any).pdfjsLib) {
-        // Automatically inject the local vendor file on demand if unavailable
-        await import('../../lib/pdfParser')
-      }
-      pdfjsLib = (window as any).pdfjsLib
+      const pdfjsLib: any = await getPdfEngine()
+      if (!pdfjsLib) throw new Error('Engine unavailable')
 
       const buffer = await file.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
@@ -118,10 +145,10 @@ const { results: templates } = await db.prepare(
         await activePdfPage.render({ canvasContext: ctx, viewport }).promise
       }
 
-      statusLabel.textContent = 'Sample loaded successfully'
+      statusLabel.textContent = 'Sample document mapped onto workspace canvas'
       workspace.classList.remove('hidden')
-    </div> catch (err: any) {
-      statusLabel.textContent = `Loading failed: ${err.message}`
+    } catch (err: any) {
+      statusLabel.textContent = 'Loading failed: ' + (err.message || 'Unknown error')
     }
   })
 
@@ -148,8 +175,8 @@ const { results: templates } = await db.prepare(
     startY = e.clientY - rect.top
 
     if (boundingBox) {
-      boundingBox.style.left = `${startX}px`
-      boundingBox.style.top = `${startY}px`
+      boundingBox.style.left = startX + 'px'
+      boundingBox.style.top = startY + 'px'
       boundingBox.style.width = '0px'
       boundingBox.style.height = '0px'
       boundingBox.classList.remove('hidden')
@@ -165,10 +192,10 @@ const { results: templates } = await db.prepare(
     const width = currentX - startX
     const height = currentY - startY
 
-    boundingBox.style.width = `${Math.abs(width)}px`
-    boundingBox.style.height = `${Math.abs(height)}px`
-    boundingBox.style.left = `${width > 0 ? startX : currentX}px`
-    boundingBox.style.top = `${height > 0 ? startY : currentY}px`
+    boundingBox.style.width = Math.abs(width) + 'px'
+    boundingBox.style.height = Math.abs(height) + 'px'
+    boundingBox.style.left = (width > 0 ? startX : currentX) + 'px'
+    boundingBox.style.top = (height > 0 ? startY : currentY) + 'px'
   })
 
   overlay?.addEventListener('mouseup', () => {
@@ -181,7 +208,7 @@ const { results: templates } = await db.prepare(
     const boxWidth = parseFloat(boundingBox.style.width)
     const boxHeight = parseFloat(boundingBox.style.height)
 
-    // Normalise dimensions into stable layout percentages
+    // Normalise canvas selection dimensions into steady percentage markers
     const pctX = (boxLeft / rect.width) * 100
     const pctY = (boxTop / rect.height) * 100
     const pctW = (boxWidth / rect.width) * 100
