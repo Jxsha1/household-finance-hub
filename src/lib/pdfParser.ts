@@ -1,4 +1,3 @@
-// Asynchronously inject and verify the external library from the CDN to guarantee availability
 async function getPdfEngine() {
   if (typeof window === 'undefined') return null
 
@@ -8,23 +7,20 @@ async function getPdfEngine() {
 
   return new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js'
-    script.crossOrigin = 'anonymous'
-    script.integrity = 'sha512-0H7S70ZEdZ0KbyK82S7bZ6F+M8XUv97uA1Q36T+CcyM/WpSAt9F8T94z40U0L8Zf4a6E/YcW48h/S7L56eA=='
-    script.referrerPolicy = 'no-referrer'
+    script.src = '/vendor/pdf.js'
 
     script.onload = () => {
       const engine = (window as any).pdfjsLib
       if (engine) {
-        engine.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js'
+        engine.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.js'
         resolve(engine)
       } else {
-        reject(new Error('PDF engine layout missing from global scope window object'))
+        reject(new Error('Local PDF engine components failed to initialise correctly'))
       }
     }
 
     script.onerror = () => {
-      reject(new Error('Network timeout occurred while downloading the script engine from CDN'))
+      reject(new Error('Failed to load local vendor script files from host'))
     }
 
     document.head.appendChild(script)
@@ -34,7 +30,7 @@ async function getPdfEngine() {
 export async function extractTextFromPdf(file: File): Promise<string> {
   const pdfjsLib = await getPdfEngine()
   if (!pdfjsLib) {
-    throw new Error('Browser environment context unavailable for core file processing')
+    throw new Error('Browser environment context unavailable for processing')
   }
 
   const arrayBuffer = await file.arrayBuffer()
@@ -101,12 +97,10 @@ if (typeof window !== 'undefined') {
     const uploadStatus = document.getElementById('upload-status')
 
     try {
-      if (uploadStatus) uploadStatus.textContent = 'Connecting script engine and reading text layers...'
-      
+      if (uploadStatus) uploadStatus.textContent = 'Reading local storage scripts...'
       const parsedText = await extractTextFromPdf(file)
       
-      if (uploadStatus) uploadStatus.textContent = 'Analysing statement interest parameters...'
-      
+      if (uploadStatus) uploadStatus.textContent = 'Running pattern matching metrics...'
       const { interestRate, minimumPayment } = parseCreditCardMetrics(parsedText)
       
       if (extractedRate) extractedRate.textContent = interestRate
@@ -120,8 +114,8 @@ if (typeof window !== 'undefined') {
       
       if (uploadStatus) uploadStatus.textContent = 'Analysis complete'
     } catch (error: any) {
-      console.error('PDF Processing Error Context Log:', error)
-      if (uploadStatus) uploadStatus.textContent = `Error: ${error.message || 'Failed to initialize engine components'}`
+      console.error(error)
+      if (uploadStatus) uploadStatus.textContent = `Error: ${error.message}`
     }
   })
 }
