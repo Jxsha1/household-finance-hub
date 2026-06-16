@@ -1,7 +1,7 @@
 export async function extractTextFromPdf(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer()
   
-  const pdfjsLib = (window as any)['pdfjs-dist/build/pdf']
+  const pdfjsLib = (window as any).pdfjsLib
   if (!pdfjsLib) {
     throw new Error('PDF engine not initialised')
   }
@@ -24,7 +24,6 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   return fullText
 }
 
-// Scrape targeted credit card fields using case-insensitive contextual boundaries
 export function parseCreditCardMetrics(text: string): { interestRate: string; minimumPayment: string } {
   const interestRateRegexes = [
     /(?:purchase|interest|annual)?\s*rate\s*(?:of)?\s*(\d+(?:\.\d+)?\s*%)/i,
@@ -82,7 +81,6 @@ if (typeof window !== 'undefined') {
       if (extractedMinimum) extractedMinimum.textContent = minimumPayment
       if (previewContainer) previewContainer.classList.remove('hidden')
       
-      // Dispatch the payload details downstream for cloud ledger syncing in the next step
       const textReadyEvent = new CustomEvent('statement-text-ready', {
         detail: { text: parsedText, interestRate, minimumPayment }
       })
