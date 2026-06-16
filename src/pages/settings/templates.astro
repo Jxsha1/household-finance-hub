@@ -1,0 +1,193 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro'
+import Card from '../../components/ui/Card.astro'
+import Button from '../../components/ui/Button.astro'
+
+const db = (Astro.locals as any).runtime?.env?.DB
+const user = (Astro.locals as any).user
+
+if (!db || !user) {
+  return Astro.redirect('/login')
+}
+
+// Fetch any existing coordinate training rules saved for this household
+const { results: templates } = await db.prepare(
+  'SELECT bank_name, created_at FROM statement_templates WHERE household_id = ? ORDER BY bank_name ASC'
+).bind(user.householdId).all()
+---
+
+<MainLayout title="Statement Template Designer">
+  <div class="space-y-4">
+    <Card>
+      <div class="mb-4">
+        <h2 class="text-sm font-bold text-slate-700">Train Spatial Templates</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Select a credit card brand and drag boxes over your metrics to map formatting variations</p>
+      </div>
+
+      <div class="space-y-3">
+        <div class="relative">
+          <label for="template-bank" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Select Card Provider</label>
+          <select id="template-bank" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 appearance-none focus:outline-none">
+            <option value="Barclays">Barclays Card</option>
+            <option value="Halifax">Halifax Card</option>
+            <option value="HSBC">HSBC Card</option>
+            <option value="AMEX">American Express</option>
+          </select>
+        </div>
+
+        <div class="relative bg-slate-50 border border-slate-100 rounded-xl p-4 text-center">
+          <input type="file" id="template-file" accept="application/pdf" class="hidden" />
+          <Button id="upload-sample-btn" variant="primary">Load Sample PDF Document</Button>
+          <p id="designer-status" class="text-[10px] text-slate-400 mt-2">Upload a document to launch the drag and drop field mapper canvas</p>
+        </div>
+      </div>
+    </Card>
+
+    <div id="designer-workspace" class="hidden space-y-3">
+      <Card className="overflow-x-auto flex justify-center bg-slate-800">
+        <div class="relative inline-block border border-slate-700" id="canvas-wrapper">
+          <canvas id="pdf-render-canvas" class="block"></canvas>
+          <div id="selection-overlay" class="absolute inset-0 cursor-crosshair touch-none select-none"></div>
+          <div id="visual-bounding-box" class="absolute border-2 border-dashed border-sky-400 bg-sky-400/20 hidden pointer-events-none"></div>
+        </div>
+      </Card>
+
+      <Card>
+        <div class="flex items-center justify-between mb-3 text-xs">
+          <span class="font-bold text-slate-700">Mapping Configuration Output</span>
+          <div class="flex gap-2">
+            <button id="target-rate-mode" class="px-2.5 py-1 rounded bg-sky-100 text-sky-800 font-bold text-[10px] uppercase">Map Rate Zone</button>
+            <button id="target-min-mode" class="px-2.5 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] uppercase">Map Minimum Zone</button>
+          </div>
+        </div>
+        <pre id="coordinate-logs" class="bg-slate-50 p-3 rounded-xl text-[10px] font-mono text-slate-600 overflow-x-auto">Waiting for box input parameters...</pre>
+        <Button id="save-template-btn" variant="secondary" className="mt-3">Save Structural Blueprint</Button>
+      </Card>
+    </div>
+  </div>
+</MainLayout>
+
+<script>
+  let pdfEngine: any = null
+  let activePdfPage: any = null
+  let currentTargetMode: 'rate' | 'min' = 'rate'
+
+  // Spatial alignment configurations to write directly into your D1 tables
+  const templateConfig = {
+    rate: { x: 0, y: 0, w: 0, h: 0 },
+    min: { x: 0, y: 0, w: 0, h: 0 }
+  }
+
+  const loadSampleBtn = document.getElementById('upload-sample-btn')
+  const fileInput = document.getElementById('template-file') as HTMLInputElement
+  const statusLabel = document.getElementById('designer-status')
+  const workspace = document.getElementById('designer-workspace')
+  const canvas = document.getElementById('pdf-render-canvas') as HTMLCanvasElement
+  const overlay = document.getElementById('selection-overlay')
+  const boundingBox = document.getElementById('visual-bounding-box')
+  const logs = document.getElementById('coordinate-logs')
+
+  const modeRateBtn = document.getElementById('target-rate-mode')
+  const modeMinBtn = document.getElementById('target-min-mode')
+  const saveBtn = document.getElementById('save-template-btn')
+
+  loadSampleBtn?.addEventListener('click', () => fileInput?.click())
+  fileInput?.addEventListener('change', async () => {
+    const file = fileInput.files?.[0]
+    if (!file || !canvas || !statusLabel || !workspace) return
+
+    statusLabel.textContent = 'Initialising parser component architecture...'
+    
+    try {
+      if (!(window as any).pdfjsLib) {
+        // Automatically inject the local vendor file on demand if unavailable
+        await import('../../lib/pdfParser')
+      }
+      pdfjsLib = (window as any).pdfjsLib
+
+      const buffer = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+      activePdfPage = await pdf.getPage(1)
+
+      const viewport = activePdfPage.getViewport({ scale: 1.2 })
+      const ctx = canvas.getContext('2d')
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+
+      if (ctx) {
+        await activePdfPage.render({ canvasContext: ctx, viewport }).promise
+      }
+
+      statusLabel.textContent = 'Sample loaded successfully'
+      workspace.classList.remove('hidden')
+    </div> catch (err: any) {
+      statusLabel.textContent = `Loading failed: ${err.message}`
+    }
+  })
+
+  modeRateBtn?.addEventListener('click', () => {
+    currentTargetMode = 'rate'
+    modeRateBtn.className = 'px-2.5 py-1 rounded bg-sky-100 text-sky-800 font-bold text-[10px] uppercase'
+    if (modeMinBtn) modeMinBtn.className = 'px-2.5 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] uppercase'
+  })
+
+  modeMinBtn?.addEventListener('click', () => {
+    currentTargetMode = 'min'
+    modeMinBtn.className = 'px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase'
+    if (modeRateBtn) modeRateBtn.className = 'px-2.5 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px] uppercase'
+  })
+
+  let drawing = false
+  let startX = 0
+  let startY = 0
+
+  overlay?.addEventListener('mousedown', (e) => {
+    drawing = true
+    const rect = overlay.getBoundingClientRect()
+    startX = e.clientX - rect.left
+    startY = e.clientY - rect.top
+
+    if (boundingBox) {
+      boundingBox.style.left = `${startX}px`
+      boundingBox.style.top = `${startY}px`
+      boundingBox.style.width = '0px'
+      boundingBox.style.height = '0px'
+      boundingBox.classList.remove('hidden')
+    }
+  })
+
+  overlay?.addEventListener('mousemove', (e) => {
+    if (!drawing || !boundingBox || !overlay) return
+    const rect = overlay.getBoundingClientRect()
+    const currentX = e.clientX - rect.left
+    const currentY = e.clientY - rect.top
+
+    const width = currentX - startX
+    const height = currentY - startY
+
+    boundingBox.style.width = `${Math.abs(width)}px`
+    boundingBox.style.height = `${Math.abs(height)}px`
+    boundingBox.style.left = `${width > 0 ? startX : currentX}px`
+    boundingBox.style.top = `${height > 0 ? startY : currentY}px`
+  })
+
+  overlay?.addEventListener('mouseup', () => {
+    if (!drawing || !boundingBox || !overlay || !logs) return
+    drawing = false
+
+    const rect = overlay.getBoundingClientRect()
+    const boxLeft = parseFloat(boundingBox.style.left)
+    const boxTop = parseFloat(boundingBox.style.top)
+    const boxWidth = parseFloat(boundingBox.style.width)
+    const boxHeight = parseFloat(boundingBox.style.height)
+
+    // Normalise dimensions into stable layout percentages
+    const pctX = (boxLeft / rect.width) * 100
+    const pctY = (boxTop / rect.height) * 100
+    const pctW = (boxWidth / rect.width) * 100
+    const pctH = (boxHeight / rect.height) * 100
+
+    templateConfig[currentTargetMode] = { x: pctX, y: pctY, w: pctW, h: pctH }
+    logs.textContent = JSON.stringify(templateConfig, null, 2)
+  })
+</script>
