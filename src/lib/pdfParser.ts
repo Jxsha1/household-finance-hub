@@ -3,10 +3,12 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   
   const pdfjsLib = (window as any).pdfjsLib
   if (!pdfjsLib) {
-    throw new Error('PDF engine not initialised')
+    throw new Error('PDF engine not found in global window scope')
   }
 
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
+  // Convert raw arrayBuffer to a structured Uint8Array to satisfy the document wrapper parser
+  const typedArray = new Uint8Array(arrayBuffer)
+  const loadingTask = pdfjsLib.getDocument({ data: typedArray })
   const pdf = await loadingTask.promise
   let fullText = ''
 
@@ -88,7 +90,9 @@ if (typeof window !== 'undefined') {
       
       if (uploadStatus) uploadStatus.textContent = 'Analysis complete'
     } catch (error: any) {
-      if (uploadStatus) uploadStatus.textContent = 'Error parsing credit document wrapper'
+      if (uploadStatus) {
+        uploadStatus.textContent = `Parsing error: ${error.message || 'Wrapper failure'}`
+      }
       console.error(error)
     }
   })
