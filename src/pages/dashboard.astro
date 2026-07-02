@@ -70,11 +70,11 @@ const monthNames = [
     
     <!-- Month Cycle Control Bar -->
     <div class="bg-white border border-slate-100 p-3 rounded-2xl flex items-center justify-between shadow-sm">
-      <button id="prev-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">← Prev</button>
+      <button id="prev-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">&larr; Prev</button>
       <span class="text-xs font-black text-slate-700 uppercase tracking-wider px-4 text-center" id="current-period-lbl" data-m={selectedMonth} data-y={selectedYear}>
         {monthNames[selectedMonth]} {selectedYear}
       </span>
-      <button id="next-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">Next →</button>
+      <button id="next-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">Next &rarr;</button>
     </div>
 
     <!-- Capital Metrics Summary Grid -->
@@ -85,14 +85,14 @@ const monthNames = [
         </div>
         <div class="space-y-2">
           {Object.keys(accountBreakdown).length === 0 ? (
-            <p class="text-xs text-slate-400 py-2">No dynamic data recorded for this month block</p>
+            <p class="text-xs text-slate-400 py-2">No data recorded for this month block</p>
           ) : (
             Object.entries(accountBreakdown).map(([bank, data]) => (
               <div class="flex justify-between items-center text-xs border-b border-slate-100 pb-2 last:border-none last:pb-0">
                 <span class="font-bold text-slate-700">{bank}</span>
                 <div class="text-right">
-                  <p class="font-mono font-bold text-slate-800">Needed: £{(data.needed / 100).toFixed(2)}</p>
-                  {data.income > 0 && <p class="text-[9px] text-emerald-600 font-bold">Expected Inflow: +£{(data.income / 100).toFixed(2)}</p>}
+                  <p class="font-mono font-bold text-slate-800">Needed: &pound;{(data.needed / 100).toFixed(2)}</p>
+                  {data.income > 0 && <p class="text-[9px] text-emerald-600 font-bold">Expected Inflow: +&pound;{(data.income / 100).toFixed(2)}</p>}
                 </div>
               </div>
             ))
@@ -103,27 +103,27 @@ const monthNames = [
       <Card className="flex flex-col justify-between">
         <div>
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Residual Balance Post Bills</h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">Estimated leftover capital following fixed obligations and one-off logging</p>
+          <p class="text-[10px] text-slate-400 mt-0.5">Leftover capital tracking following fixed obligations and ad hoc additions</p>
         </div>
         <div class="py-4">
           <span class={`text-3xl font-black block tracking-tight ${parseFloat(residualSurplusValue) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            £{residualSurplusValue}
+            &pound;{residualSurplusValue}
           </span>
         </div>
         <div class="text-[10px] text-slate-400 border-t border-slate-100 pt-2 space-y-0.5 grid grid-cols-2">
           <div>
-            <p>Fixed Out: £{(totalBillsCostPence / 100).toFixed(2)}</p>
-            <p>Ad Hoc Out: £{(oneOffSpendPence / 100).toFixed(2)}</p>
+            <p>Fixed Out: &pound;{(totalBillsCostPence / 100).toFixed(2)}</p>
+            <p>Ad Hoc Out: &pound;{(oneOffSpendPence / 100).toFixed(2)}</p>
           </div>
           <div class="text-right">
-            <p>Fixed In: £{(totalExpectedIncomePence / 100).toFixed(2)}</p>
-            <p>Ad Hoc In: £{(oneOffIncomePence / 100).toFixed(2)}</p>
+            <p>Fixed In: &pound;{(totalExpectedIncomePence / 100).toFixed(2)}</p>
+            <p>Ad Hoc In: &pound;{(oneOffIncomePence / 100).toFixed(2)}</p>
           </div>
         </div>
       </Card>
     </div>
 
-    <!-- Enhanced One-Off Payment Logging Widget -->
+    <!-- One-Off Payment Logging Widget -->
     <Card>
       <div class="mb-3">
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Log One-Off Payment</h4>
@@ -134,7 +134,7 @@ const monthNames = [
           <input type="text" id="oneoff-bank" required placeholder="Bank Account (e.g. Monzo)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
         </div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <input type="number" step="0.01" id="oneoff-amount" required placeholder="Amount (£)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+          <input type="number" step="0.01" id="oneoff-amount" required placeholder="Amount (&pound;)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
           <select id="oneoff-direction" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none">
             <option value="OUT">Money Out</option>
             <option value="IN">Money In</option>
@@ -145,7 +145,7 @@ const monthNames = [
       </form>
     </Card>
 
-    <!-- Historic Ledger Output -->
+    <!-- Historic Ledger Output containing inline editing triggers -->
     <Card>
       <div class="mb-2">
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Transaction History Log</h4>
@@ -158,17 +158,83 @@ const monthNames = [
             <div class="flex justify-between items-center text-xs p-3 bg-slate-50 rounded-xl border border-slate-100">
               <div>
                 <p class="font-bold text-slate-700">{t.description}</p>
-                <p class="text-[9px] text-slate-400">{t.bank_name || 'Unknown Bank'} · {t.date}</p>
+                <p class="text-[9px] text-slate-400">{t.bank_name || 'Unknown Bank'} &middot; {t.date}</p>
               </div>
-              <span class={`font-mono font-bold ${t.amount >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                {t.amount >= 0 ? '+' : '-'}£{(Math.abs(t.amount) / 100).toFixed(2)}
-              </span>
+              <div class="flex items-center gap-3">
+                <span class={`font-mono font-bold ${t.amount >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  {t.amount >= 0 ? '+' : '-'}&pound;{(Math.abs(t.amount) / 100).toFixed(2)}
+                </span>
+                <div class="flex gap-1.5">
+                  <button 
+                    type="button" 
+                    class="trigger-edit-tx px-2 py-1 bg-sky-50 text-sky-700 font-bold text-[10px] rounded hover:bg-sky-100"
+                    data-json={JSON.stringify(t)}
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    type="button" 
+                    class="trigger-purge-tx px-2 py-1 bg-rose-50 text-rose-700 font-bold text-[10px] rounded hover:bg-rose-100"
+                    data-id={t.id}
+                  >
+                    Purge
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       )}
     </Card>
 
+  </div>
+
+  <!-- One-off Modification Dialogue Overlay Panel -->
+  <div id="tx-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full border border-slate-100 shadow-xl p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Modify One-Off Payment</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Amending this form updates the historical transaction record parameters directly</p>
+      </div>
+
+      <form id="modal-tx-form" class="space-y-3">
+        <input type="hidden" id="modal-tx-id" />
+        
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">Payment Label</label>
+          <input type="text" id="modal-tx-desc" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">Bank Account Name</label>
+          <input type="text" id="modal-tx-bank" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Amount (&pound;)</label>
+            <input type="number" step="0.01" id="modal-tx-amount" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Cash Direction</label>
+            <select id="modal-tx-direction" class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700">
+              <option value="OUT">Money Out</option>
+              <option value="IN">Money In</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">Transaction Date</label>
+          <input type="date" id="modal-tx-date" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="close-tx-modal" class="flex-1 h-10 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl">Cancel</button>
+          <button type="submit" class="flex-1 h-10 bg-sky-600 text-white font-bold text-xs rounded-xl">Save Changes</button>
+        </div>
+      </form>
+    </div>
   </div>
 </MainLayout>
 
@@ -177,6 +243,10 @@ const monthNames = [
   const prevBtn = document.getElementById('prev-month-btn')
   const nextBtn = document.getElementById('next-month-btn')
   const oneOffForm = document.getElementById('one-off-spend-form')
+  
+  const txModal = document.getElementById('tx-modal')
+  const closeTxModalBtn = document.getElementById('close-tx-modal')
+  const modalTxForm = document.getElementById('modal-tx-form')
 
   const inlineDateBox = document.getElementById('oneoff-date') as HTMLInputElement
   if (inlineDateBox && !inlineDateBox.value) {
@@ -227,5 +297,75 @@ const monthNames = [
     } catch (err: any) {
       alert(err.message)
     }
+  })
+
+  // Open modal and pre-fill form input items upon choice selection matches
+  document.querySelectorAll('.trigger-edit-tx').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const target = e.currentTarget as HTMLButtonElement
+      const rawJson = target.getAttribute('data-json')
+      if (!rawJson || !txModal) return
+
+      const t = JSON.parse(rawJson);
+      (document.getElementById('modal-tx-id') as HTMLInputElement).value = t.id;
+      (document.getElementById('modal-tx-desc') as HTMLInputElement).value = t.description;
+      (document.getElementById('modal-tx-bank') as HTMLInputElement).value = t.bank_name || '';
+      (document.getElementById('modal-tx-date') as HTMLInputElement).value = t.date
+      
+      const absoluteAmount = Math.abs(t.amount / 100)
+      ;(document.getElementById('modal-tx-amount') as HTMLInputElement).value = absoluteAmount.toFixed(2);
+      (document.getElementById('modal-tx-direction') as HTMLSelectElement).value = t.amount >= 0 ? 'IN' : 'OUT'
+
+      txModal.classList.remove('hidden')
+    })
+  })
+
+  closeTxModalBtn?.addEventListener('click', () => txModal?.classList.add('hidden'))
+
+  // Handle transaction modifications (PUT)
+  modalTxForm?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const id = (document.getElementById('modal-tx-id') as HTMLInputElement).value
+    const description = (document.getElementById('modal-tx-desc') as HTMLInputElement).value
+    const bank_name = (document.getElementById('modal-tx-bank') as HTMLInputElement).value
+    const date = (document.getElementById('modal-tx-date') as HTMLInputElement).value
+    const rawVal = parseFloat((document.getElementById('modal-tx-amount') as HTMLInputElement).value)
+    const direction = (document.getElementById('modal-tx-direction') as HTMLSelectElement).value
+
+    const amount = direction === 'OUT' ? Math.round(rawVal * 100) * -1 : Math.round(rawVal * 100)
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, description, bank_name, date, amount })
+      })
+      if (!res.ok) throw new Error('Failed to overwrite transaction column parameters')
+      window.location.reload()
+    } catch (err: any) {
+      alert(err.message)
+    }
+  })
+
+  // Handle immediate physical database purges (DELETE)
+  document.querySelectorAll('.trigger-purge-tx').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement
+      const id = target.getAttribute('data-id')
+      
+      if (!id || !confirm('Are you sure you want to permanently purge this ad hoc payment record from your ledger?')) return
+
+      try {
+        const res = await fetch('/api/transactions', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        })
+        if (!res.ok) throw new Error('Transaction deletion pipeline failed')
+        window.location.reload()
+      } catch (err: any) {
+        alert(err.message)
+      }
+    })
   })
 </script>
