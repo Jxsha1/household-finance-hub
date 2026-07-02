@@ -11,7 +11,7 @@ const user = (Astro.locals as any).user
 <html lang="en-GB" class="h-full bg-slate-50/50">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
     <title>{title} · Household Finance Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,12 +23,15 @@ const user = (Astro.locals as any).user
       .font-mono {
         font-family: 'JetBrains Mono', monospace;
       }
+      /* Prevent elastic bounce scrolling on mobile boundaries */
+      html, body {
+        overscroll-behavior: none;
+      }
     </style>
   </head>
-  <body class="h-full flex flex-col md:flex-row text-slate-800 antialiased selection:bg-sky-100 selection:text-sky-900">
+  <body class="h-full flex flex-col md:flex-row text-slate-800 antialiased selection:bg-sky-100 selection:text-sky-900 overflow-hidden">
     
-    <!-- Left Hand Sidebar Navigation Frame Panel Container -->
-    <aside class="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-100 flex flex-col shrink-0">
+    <aside class="hidden md:flex w-64 bg-white border-r border-slate-100 flex-col shrink-0 z-40">
       <div class="h-16 px-6 border-b border-slate-100/60 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-lg bg-sky-600 flex items-center justify-center text-white shadow-sm shadow-sky-200">
@@ -40,7 +43,6 @@ const user = (Astro.locals as any).user
         </div>
       </div>
 
-      <!-- Main Sidebar Directory Redirection Navigation Grid Links -->
       <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
         <a href="/dashboard" class="flex items-center gap-3 px-4 h-11 text-xs font-bold text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
           <span>Dashboard</span>
@@ -56,14 +58,13 @@ const user = (Astro.locals as any).user
         </a>
       </nav>
 
-      <!-- Active Logged In Session Household Identification Profile Badge Footer -->
       {user && (
         <div class="p-4 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between">
           <div class="overflow-hidden">
             <p class="text-[11px] font-black text-slate-700 truncate">{user.email}</p>
             <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Household Member</p>
           </div>
-          <a href="/logout" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors" title="Sign Out of Session">
+          <a href="/logout" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors" title="Sign Out">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
             </svg>
@@ -72,27 +73,48 @@ const user = (Astro.locals as any).user
       )}
     </aside>
 
-    <!-- Main Dynamic Workspace Output Container Segment Frame Layout Area -->
-    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
-      
-      <!-- Upper Master Application Header Workspace Sub panel -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto mb-16 md:mb-0">
       <header class="h-16 px-6 bg-white border-b border-slate-100 flex items-center justify-between shrink-0 sticky top-0 z-30">
         <div class="flex items-center gap-3">
           <h1 class="text-sm font-black text-slate-800 uppercase tracking-wide">{title}</h1>
         </div>
-        
-        <!-- Extensible Dynamic Action Workspace Header Slot Container -->
         <div class="flex items-center gap-3">
           <slot name="header-actions" />
         </div>
       </header>
 
-      <!-- Primary Page Component Viewport Render Section Node -->
-      <main class="flex-1 p-6 max-w-5xl w-full mx-auto">
+      <main class="flex-1 p-4 md:p-6 max-w-5xl w-full mx-auto">
         <slot />
       </main>
-
     </div>
+
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-100 flex justify-around items-center px-2 z-50 pb-safe">
+      <a href="/dashboard" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+        </svg>
+        <span class="text-[9px] font-bold mt-1">Dashboard</span>
+      </a>
+      <a href="/recurring-payments" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+        <span class="text-[9px] font-bold mt-1">Recurring</span>
+      </a>
+      <a href="/transactions" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+        </svg>
+        <span class="text-[9px] font-bold mt-1">Ledger</span>
+      </a>
+      <a href="/settings" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-600 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span class="text-[9px] font-bold mt-1">Settings</span>
+      </a>
+    </nav>
 
   </body>
 </html>
