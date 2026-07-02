@@ -1,0 +1,356 @@
+---
+import MainLayout from '../layouts/MainLayout.astro'
+import Card from '../components/ui/Card.astro'
+import Button from '../components/ui/Button.astro'
+
+const db = (Astro.locals as any).runtime?.env?.DB
+const user = (Astro.locals as any).user
+
+if (!db || !user) {
+  return Astro.redirect('/login')
+}
+
+// Extract absolutely all ongoing and historic standing arrangements
+const { results } = await db.prepare(
+  'SELECT id, name, amount, direction, bank_name, day_of_month, start_date, end_date FROM recurring_payments WHERE household_id = ? ORDER BY case when end_date is null then 0 else 1 end, day_of_month ASC'
+).bind(user.householdId).all()
+
+const records = results || []
+
+const formatCurrency = (pence: number) => {
+  return `£${(Math.abs(pence) / 100).toFixed(2)}`
+}
+---
+
+<MainLayout title="Recurring Payments">
+  <div class="space-y-5">
+    
+    <!-- Unified Interactive Credit Card Analysis Box Wrapper -->
+    <Card>
+      <div class="mb-4">
+        <h3 class="text-sm font-bold text-slate-700">Credit Card Statement Extraction Engine</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Upload a statement to visually map or automatically isolate parameters using memorised bank rules</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-3">
+          <div class="relative">
+            <label for="uploader-bank-select" class="absolute left-3 top-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Statement Issuing Bank</label>
+            <select id="uploader-bank-select" class="w-full h-12 pt-4 pb-1 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 appearance-none focus:outline-none">
+              <option value="Barclays">Barclays Card</option>
+              <option value="Halifax">Halifax Card</option>
+              <option value="HSBC">HSBC Card</option>
+              <option value="AMEX">American Express</option>
+            </select>
+          </div>
+
+          <div id="drop-zone" class="w-full h-28 border-2 border-dashed border-sky-200 hover:border-sky-400 bg-sky-50/20 rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer transition-colors">
+            <span class="text-xs font-bold text-slate-600">Click or drop statement statement PDF here</span>
+            <input type="file" id="statement-file-input" accept="application/pdf" class="hidden" />
+          </div>
+        </div>
+
+        <div id="extraction-preview-panel" class="hidden border border-slate-100 rounded-xl p-3 bg-slate-50 relative">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] font-bold uppercase text-slate-400">Visual Mapping Selector</span>
+            <div class="flex gap-1.5">
+              <button id="set-rate-zone" class="px-2 py-0.5 text-[9px] font-bold uppercase bg-sky-100 text-sky-800 rounded">Rate</button>
+              <button id="set-min-zone" class="px-2 py-0.5 text-[9px] font-bold uppercase bg-slate-200 text-slate-600 rounded">Min Due</button>
+            </div>
+          </div>
+          <div class="relative overflow-auto max-h-48 border border-slate-200 rounded bg-white flex justify-center" id="canvas-scroll-container">
+            <canvas id="statement-render-canvas" class="block"></canvas>
+            <div id="canvas-selection-overlay" class="absolute inset-0 cursor-crosshair"></div>
+            <div id="canvas-bounding-box" class="absolute border border-dashed border-sky-500 bg-sky-500/20 hidden pointer-events-none"></div>
+          </div>
+          <div class="mt-2 text-[10px] font-mono text-slate-500 flex justify-between bg-white p-2 rounded border border-slate-100">
+            <div>Rate: <span id="val-rate">Not selected</span></div>
+            <div>Min: <span id="val-min">Not selected</span></div>
+          </div>
+          <button id="confirm-extraction-btn" class="w-full h-8 mt-2 bg-emerald-600 text-white font-bold text-xs rounded-lg transition-colors">Save Extracted Metrics</button>
+        </div>
+      </div>
+    </Card>
+
+    <!-- Master Tracking Add Form Layout Card Container -->
+    <Card>
+      <div class="mb-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Create New Recurring Liability</h3>
+      </div>
+      <form id="add-recurring-form" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <input type="text" id="add-name" required placeholder="Payment Name (e.g. Rent)" class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <input type="number" step="0.01" id="add-amount" required placeholder="Amount (£)" class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <select id="add-direction" class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none">
+          <option value="OUT">Outgoing Expense</option>
+          <option value="IN">Incoming Revenue</option>
+        </select>
+        <input type="text" id="add-bank" required placeholder="Bank Name (e.g. Monzo)" class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <input type="number" min="1" max="31" id="add-day" required placeholder="Due Day (1-31)" class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <input type="date" id="add-start" required class="h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <div class="col-span-2 md:col-span-3">
+          <Button type="submit" variant="primary" className="w-full h-10">Add Payment Parameter</Button>
+        </div>
+      </form>
+    </Card>
+
+    <!-- Complete Liability Listing Display Interface Track -->
+    <Card>
+      <div class="mb-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Configured Standing Orders & Commitments</h3>
+      </div>
+
+      <div class="space-y-2">
+        {records.map((r: any) => {
+          const isExpired = r.end_date && new Date(r.end_date) < new Date()
+          return (
+            <div class={`p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between text-xs transition-opacity ${isExpired ? 'opacity-50' : ''}`}>
+              <div>
+                <p class="font-bold text-slate-800">
+                  {r.name}
+                  {isExpired && <span class="ml-1.5 text-[9px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-100 px-1 rounded">Ended</span>}
+                </p>
+                <p class="text-[10px] text-slate-400 mt-0.5">Account: {r.bank_name} · Day {r.day_of_month} · Span: {r.start_date} {r.end_date ? `to ${r.end_date}` : 'Ongoing'}</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class={`font-mono font-bold ${r.direction === 'IN' ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  {r.direction === 'IN' ? '+' : '-'}{formatCurrency(r.amount)}
+                </span>
+                <div class="flex gap-1.5">
+                  <button 
+                    type="button" 
+                    class="trigger-edit-modal px-2 py-1 bg-sky-50 text-sky-700 font-bold text-[10px] rounded hover:bg-sky-100"
+                    data-json={JSON.stringify(r)}
+                  >
+                    Modify
+                  </button>
+                  <button 
+                    type="button" 
+                    class="trigger-delete-action px-2 py-1 bg-rose-50 text-rose-700 font-bold text-[10px] rounded hover:bg-rose-100"
+                    data-id={r.id}
+                    data-expired={isExpired ? 'true' : 'false'}
+                  >
+                    {isExpired ? 'Purge' : 'Stop'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  </div>
+
+  <!-- Pop-up Modification Layer Modal Dialogue Overlay Structure -->
+  <div id="modification-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full border border-slate-100 shadow-xl p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Modify Recurring Commitment</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Updates applied here will overwrite active running column fields directly</p>
+      </div>
+
+      <form id="modal-update-form" class="space-y-3">
+        <input type="hidden" id="modal-id" />
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">Payment Description</label>
+          <input type="text" id="modal-name" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Amount (£)</label>
+            <input type="number" step="0.01" id="modal-amount" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Flow Direction</label>
+            <select id="modal-direction" class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700">
+              <option value="OUT">Outgoing Expense</option>
+              <option value="IN">Incoming Revenue</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Target Account</label>
+            <input type="text" id="modal-bank" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Due Day (1-31)</label>
+            <input type="number" min="1" max="31" id="modal-day" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Start Date</label>
+            <input type="date" id="modal-start" required class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-slate-400 uppercase">End Date (Optional)</label>
+            <input type="date" id="modal-end" class="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700" />
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="close-modal-btn" class="flex-1 h-10 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl">Cancel</button>
+          <button type="submit" class="flex-1 h-10 bg-sky-600 text-white font-bold text-xs rounded-xl">Overwrite Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</MainLayout>
+
+<script>
+  // Dynamic element mapping coordinates variables setup
+  const modal = document.getElementById('modification-modal')
+  const closeModalBtn = document.getElementById('close-modal-btn')
+  const modalForm = document.getElementById('modal-update-form')
+  const addForm = document.getElementById('add-recurring-form')
+
+  const docDateInput = document.getElementById('add-start') as HTMLInputElement
+  if (docDateInput && !docDateInput.value) {
+    docDateInput.value = new Date().toISOString().split('T')[0]
+  }
+
+  // Intercept data streams to populate pop-up inputs on target selection matches
+  document.querySelectorAll('.trigger-edit-modal').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const dataRaw = (e.currentTarget as HTMLButtonElement).getAttribute('data-json')
+      if (!dataRaw || !modal) return
+
+      const r = JSON.parse(dataRaw);
+      (document.getElementById('modal-id') as HTMLInputElement).value = r.id;
+      (document.getElementById('modal-name') as HTMLInputElement).value = r.name;
+      (document.getElementById('modal-amount') as HTMLInputElement).value = (r.amount / 100).toFixed(2);
+      (document.getElementById('modal-direction') as HTMLSelectElement).value = r.direction;
+      (document.getElementById('modal-bank') as HTMLInputElement).value = r.bank_name;
+      (document.getElementById('modal-day') as HTMLInputElement).value = r.day_of_month;
+      (document.getElementById('modal-start') as HTMLInputElement).value = r.start_date;
+      (document.getElementById('modal-end') as HTMLInputElement).value = r.end_date || ''
+
+      modal.classList.remove('hidden')
+    })
+  })
+
+  closeModalBtn?.addEventListener('click', () => modal?.classList.add('hidden'))
+
+  // Process standard form submissions safely using async actions
+  addForm?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = (document.getElementById('add-name') as HTMLInputElement).value
+    const rawVal = parseFloat((document.getElementById('add-amount') as HTMLInputElement).value)
+    const direction = (document.getElementById('add-direction') as HTMLSelectElement).value
+    const bank_name = (document.getElementById('add-bank') as HTMLInputElement).value
+    const day_of_month = parseInt((document.getElementById('add-day') as HTMLInputElement).value, 10)
+    const start_date = docDateInput.value
+
+    const amount = Math.round(rawVal * 100)
+
+    try {
+      const res = await fetch('/api/recurring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, amount, direction, bank_name, day_of_month, start_date })
+      })
+      if (!res.ok) throw new Error('Insertion sequence breakdown failed')
+      window.location.reload()
+    } catch (err: any) {
+      alert(err.message)
+    }
+  })
+
+  modalForm?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const id = (document.getElementById('modal-id') as HTMLInputElement).value
+    const name = (document.getElementById('modal-name') as HTMLInputElement).value
+    const rawVal = parseFloat((document.getElementById('modal-amount') as HTMLInputElement).value)
+    const direction = (document.getElementById('modal-direction') as HTMLSelectElement).value
+    const bank_name = (document.getElementById('modal-bank') as HTMLInputElement).value
+    const day_of_month = parseInt((document.getElementById('modal-day') as HTMLInputElement).value, 10)
+    const start_date = (document.getElementById('modal-start') as HTMLInputElement).value
+    const end_date = (document.getElementById('modal-end') as HTMLInputElement).value
+
+    const amount = Math.round(rawVal * 100)
+
+    try {
+      const res = await fetch('/api/recurring', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, amount, direction, bank_name, day_of_month, start_date, end_date })
+      })
+      if (!res.ok) throw new Error('Could not write database overwrite columns')
+      window.location.reload()
+    } catch (err: any) {
+      alert(err.message)
+    }
+  })
+
+  // Handle standard soft-closing or immediate hard purges for ended payment records
+  document.querySelectorAll('.trigger-delete-action').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement
+      const id = target.getAttribute('data-id')
+      const isExpired = target.getAttribute('data-expired') === 'true'
+
+      let confirmMsg = 'Are you sure you want to stop this running subscription timeline item?'
+      let purge = false
+
+      if (isExpired) {
+        confirmMsg = 'This commitment has already ended. Would you like to completely purge it from database history logs?'
+        purge = true
+      }
+
+      if (!id || !confirm(confirmMsg)) return
+
+      try {
+        const res = await fetch('/api/recurring', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, purge })
+        })
+        if (!res.ok) throw new Error('Failed tracking mutation endpoint operations')
+        window.location.reload()
+      } catch (err: any) {
+        alert(err.message)
+      }
+    })
+  })
+
+  // Canvas visual boundary coordinates mapper logic blocks
+  const dropZone = document.getElementById('drop-zone')
+  const fileInput = document.getElementById('statement-file-input') as HTMLInputElement
+  const previewPanel = document.getElementById('extraction-preview-panel')
+  const canvas = document.getElementById('statement-render-canvas') as HTMLCanvasElement
+  const overlay = document.getElementById('canvas-selection-overlay')
+  const boundingBox = document.getElementById('canvas-bounding-box')
+
+  let activePageRef: any = null
+  let mapperMode = 'rate'
+  const coordsMap = { rate: null, min: null }
+
+  dropZone?.addEventListener('click', () => fileInput?.click())
+  fileInput?.addEventListener('change', async () => {
+    const file = fileInput.files?.[0]
+    if (!file || !canvas || !previewPanel) return
+
+    try {
+      if (!(window as any).pdfjsLib) {
+        await import('../lib/pdfParser')
+      }
+      const pdfjsLib = (window as any).pdfjsLib
+      const buf = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise
+      activePageRef = await pdf.getPage(1)
+
+      const viewport = activePageRef.getViewport({ scale: 1.0 })
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      const ctx = canvas.getContext('2d')
+
+      if (ctx) {
+        await activePageRef.render({ canvasContext: ctx, viewport }).promise
+      }
+
+      previewPanel.classList.remove('hidden')
+    } catch (err: any) {
+      alert('PDF Preview setup failure: ' + err.message)
+    }
+  })
+</script>
