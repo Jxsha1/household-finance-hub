@@ -1,10 +1,7 @@
 ---
 import MainLayout from '../layouts/MainLayout.astro'
-import BudgetToggle from '../components/finance/BudgetToggle.astro'
-import MonthYearSelector from '../components/finance/MonthYearSelector.astro'
-import TransactionList from '../components/finance/TransactionList.astro'
-import StatementUpload from '../components/finance/StatementUpload.astro'
 import Card from '../components/ui/Card.astro'
+import Button from '../components/ui/Button.astro'
 
 const db = (Astro.locals as any).runtime?.env?.DB
 const user = (Astro.locals as any).user
@@ -13,90 +10,140 @@ if (!db || !user) {
   return Astro.redirect('/login')
 }
 
-// Extract selected timeline matrices from URL search parameters to run precision monthly sorting
+// Intercept timeline matrices parameter adjustments from request loops safely
 const url = Astro.url
-const selectedMonth = parseInt(url.searchParams.get('month') || new Date().getMonth().toString(), 10)
-const selectedYear = parseInt(url.searchParams.get('year') || new Date().getFullYear().toString(), 10)
+const currentYearObj = new Date().getFullYear()
+const currentMonthObj = new Date().getMonth()
 
-// Format the date boundaries for database filtering
+const selectedMonth = url.searchParams.get('month') !== null ? parseInt(url.searchParams.get('month') || '0', 10) : currentMonthObj
+const selectedYear = url.searchParams.get('year') !== null ? parseInt(url.searchParams.get('year') || '0', 10) : currentYearObj
+
 const targetMonthStr = String(selectedMonth + 1).padStart(2, '0')
 const filterStart = `${selectedYear}-${targetMonthStr}-01`
 const filterEnd = `${selectedYear}-${targetMonthStr}-31`
 
-const [householdResult, transactionsResult, recurringResult] = await Promise.all([
-  db.prepare('SELECT budget_mode FROM households WHERE id = ?').bind(user.householdId).first(),
-  db.prepare('SELECT id, description, amount, date, created_by_user_id FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC, created_at DESC').bind(user.householdId, filterStart, filterEnd).all(),
-  db.prepare('SELECT id, name, amount, direction, bank_name, day_of_month FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ? )').bind(user.householdId, filterEnd, filterStart).all()
+const [transactionsResult, recurringResult] = await Promise.all([
+  db.prepare('SELECT id, description, amount, date FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC').bind(user.householdId, filterStart, filterEnd).all(),
+  db.prepare('SELECT name, amount, direction, bank_name FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)').bind(user.householdId, filterEnd, filterStart).all()
 ])
 
-const budgetMode = (householdResult?.budget_mode as 'cash_flow' | 'zero_based') || 'cash_flow'
 const transactions = (transactionsResult?.results as any[]) || []
-const activeFixedPayments = (recurringResult?.results as any[]) || []
+const activeBills = (recurringResult?.results as any[]) || []
 
-// Compute fluid overview metrics using transactional calculations
-let totalIncomePence = 0
-let totalExpensesPence = 0
+// Compute asset liquidity and funding limits grouped across separate bank wrappers
+const accountBreakdown: Record<string, { needed: number; income: number }> = {}
+let totalBillsCostPence = 0
+let totalExpectedIncomePence = 0
 
-transactions.forEach(tx => {
-  if (tx.amount > 0) totalIncomePence += tx.amount
-  else totalExpensesPence += Math.abs(tx.amount)
+activeBills.forEach(b => {
+  if (!accountBreakdown[b.bank_name]) {
+    accountBreakdown[b.bank_name] = { needed: 0, income: 0 }
+  }
+  if (b.direction === 'OUT') {
+    accountBreakdown[b.bank_name].needed += b.amount
+    totalBillsCostPence += b.amount
+  } else {
+    accountBreakdown[b.bank_name].income += b.amount
+    totalExpectedIncomePence += b.amount
+  }
 })
 
-activeFixedPayments.forEach(fp => {
-  if (fp.direction === 'IN') totalIncomePence += fp.amount
-  else totalExpensesPence += fp.amount
+let oneOffSpendPence = 0
+transactions.forEach(t => {
+  if (t.amount < 0) {
+    oneOffSpendPence += Math.abs(t.amount)
+  }
 })
 
-const totalIncome = (totalIncomePence / 100).toFixed(2)
-const totalExpenses = (totalExpensesPence / 100).toFixed(2)
-const residualSurplus = ((totalIncomePence - totalExpensesPence) / 100).toFixed(2)
+const residualSurplusValue = ((totalExpectedIncomePence - totalBillsCostPence - oneOffSpendPence) / 100).toFixed(2)
+
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+]
 ---
 
-<MainLayout title="Household Dashboard">
-  <div slot="header-actions" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100/80 px-2.5 py-1 rounded-full">
-    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Cloud Connected</span>
-  </div>
-
+<MainLayout title="Dashboard Balance Overview">
   <div class="space-y-5">
     
-    <MonthYearSelector />
-
-    <div class="grid grid-cols-3 gap-2.5">
-      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
-        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Inflow</span>
-        <span class="text-xs font-black text-emerald-600 mt-1 block">£{totalIncome}</span>
-      </div>
-      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
-        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Outgoings</span>
-        <span class="text-xs font-black text-slate-600 mt-1 block">£{totalExpenses}</span>
-      </div>
-      <div class="bg-white border border-slate-100 p-3 rounded-xl shadow-sm text-center">
-        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wide">Surplus</span>
-        <span class={`text-xs font-black mt-1 block ${parseFloat(residualSurplus) >= 0 ? 'text-sky-600' : 'text-rose-600'}`}>£{residualSurplus}</span>
-      </div>
+    <!-- Timeline Navigation Loop Header Controls -->
+    <div class="bg-white border border-slate-100 p-3 rounded-2xl flex items-center justify-between shadow-sm">
+      <button id="prev-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">← Previous Month</button>
+      <span class="text-xs font-black text-slate-700 uppercase tracking-wider px-4" id="current-period-lbl" data-m={selectedMonth} data-y={selectedYear}>
+        {monthNames[selectedMonth]} {selectedYear}
+      </span>
+      <button id="next-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">Next Month →</button>
     </div>
-    
-    <BudgetToggle currentMode={budgetMode} />
+
+    <!-- Capital Requirements Analysis Metrics Card -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card>
+        <div class="mb-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Funds Required by Account</h4>
+        </div>
+        <div class="space-y-2">
+          {Object.keys(accountBreakdown).length === 0 ? (
+            <p class="text-xs text-slate-400 py-2">No data recorded for this month block</p>
+          ) : (
+            Object.entries(accountBreakdown).map(([bank, data]) => (
+              <div class="flex justify-between items-center text-xs border-b border-slate-100 pb-2 last:border-none last:pb-0">
+                <span class="font-bold text-slate-700">{bank}</span>
+                <div class="text-right">
+                  <p class="font-mono font-bold text-slate-800">Needed: £{(data.needed / 100).toFixed(2)}</p>
+                  {data.income > 0 && <p class="text-[9px] text-emerald-600 font-bold">Expected Inflow: +£{(data.income / 100).toFixed(2)}</p>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+
+      <Card className="flex flex-col justify-between">
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Residual Balance Post Bills</h4>
+          <p class="text-[10px] text-slate-400 mt-0.5">Estimated leftover capital following fixed monthly line item obligations</p>
+        </div>
+        <div class="py-4">
+          <span class={`text-3xl font-black block tracking-tight ${parseFloat(residualSurplusValue) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            £{residualSurplusValue}
+          </span>
+        </div>
+        <div class="text-[10px] text-slate-400 border-t border-slate-100 pt-2 space-y-0.5">
+          <p>Fixed Commitments: £{(totalBillsCostPence / 100).toFixed(2)}</p>
+          <p>One-off Deductions: £{(oneOffSpendPence / 100).toFixed(2)}</p>
+        </div>
+      </Card>
+    </div>
+
+    <!-- One-Off Payment Injection Field Form Wrapper Module -->
+    <Card>
+      <div class="mb-3">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Log One-Off Ad Hoc Expense</h4>
+      </div>
+      <form id="one-off-spend-form" class="flex flex-col md:flex-row gap-3">
+        <input type="text" id="oneoff-desc" required placeholder="Expense Label (e.g. Weekly Shop)" class="flex-1 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <input type="number" step="0.01" id="oneoff-amount" required placeholder="Amount (£)" class="w-full md:w-44 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <input type="date" id="oneoff-date" required class="w-full md:w-44 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        <Button type="submit" variant="secondary" className="h-11 px-6">Record Spending</Button>
+      </form>
+    </Card>
 
     <Card>
-      <div class="mb-3 flex items-center justify-between">
-        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Fixed Monthly Commitments</h3>
-        <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Standing Orders</span>
+      <div class="mb-2">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Transaction History Log</h4>
       </div>
-
-      {activeFixedPayments.length === 0 ? (
-        <p class="text-xs text-slate-400 text-center py-3">No active standing agreements linked for this period</p>
+      {transactions.length === 0 ? (
+        <p class="text-xs text-slate-400 text-center py-4">No one-off transactions added to this monthly ledger frame yet</p>
       ) : (
         <div class="space-y-2">
-          {activeFixedPayments.map(fp => (
-            <div class="flex items-center justify-between border-b border-slate-100/60 pb-2 last:border-none last:pb-0 text-xs">
+          {transactions.map(t => (
+            <div class="flex justify-between items-center text-xs p-2.5 bg-slate-50 rounded-xl border border-slate-100">
               <div>
-                <p class="font-bold text-slate-700">{fp.name}</p>
-                <p class="text-[9px] text-slate-400">Account: {fp.bank_name} · Due Day {fp.day_of_month}</p>
+                <p class="font-bold text-slate-700">{t.description}</p>
+                <p class="text-[9px] text-slate-400">{t.date}</p>
               </div>
-              <span class={`font-mono font-bold ${fp.direction === 'IN' ? 'text-emerald-600' : 'text-slate-600'}`}>
-                {fp.direction === 'IN' ? '+' : '−'}£{(fp.amount / 100).toFixed(2)}
+              <span class="font-mono font-bold text-slate-600">
+                -£{(Math.abs(t.amount) / 100).toFixed(2)}
               </span>
             </div>
           ))}
@@ -104,21 +151,62 @@ const residualSurplus = ((totalIncomePence - totalExpensesPence) / 100).toFixed(
       )}
     </Card>
 
-    <StatementUpload />
-
-    <TransactionList transactions={transactions} />
-    
   </div>
 </MainLayout>
 
 <script>
-  import '../lib/pdfParser.ts'
+  const lbl = document.getElementById('current-period-lbl')
+  const prevBtn = document.getElementById('prev-month-btn')
+  const nextBtn = document.getElementById('next-month-btn')
+  const oneOffForm = document.getElementById('one-off-spend-form')
 
-  window.addEventListener('date-filter-change', (event: any) => {
-    const { month, year } = event.detail
-    const url = new URL(window.location.href)
-    url.searchParams.set('month', month)
-    url.searchParams.set('year', year)
-    window.location.href = url.toString()
+  const inlineDateBox = document.getElementById('oneoff-date') as HTMLInputElement
+  if (inlineDateBox && !inlineDateBox.value) {
+    inlineDateBox.value = new Date().toISOString().split('T')[0]
+  }
+
+  function shiftTimeline(direction: number) {
+    if (!lbl) return
+    let m = parseInt(lbl.getAttribute('data-m') || '0', 10)
+    let y = parseInt(lbl.getAttribute('data-y') || '2026', 10)
+
+    m += direction
+    if (m < 0) {
+      m = 11
+      y -= 1
+    } else if (m > 11) {
+      m = 0
+      y += 1
+    }
+
+    const u = new URL(window.location.href)
+    u.searchParams.set('month', m.toString())
+    u.searchParams.set('year', y.toString())
+    window.location.href = u.toString()
+  }
+
+  prevBtn?.addEventListener('click', () => shiftTimeline(-1))
+  nextBtn?.addEventListener('click', () => shiftTimeline(1))
+
+  oneOffForm?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const description = (document.getElementById('oneoff-desc') as HTMLInputElement).value
+    const rawVal = parseFloat((document.getElementById('oneoff-amount') as HTMLInputElement).value)
+    const date = inlineDateBox.value
+
+    // Convert to a negative value to log it as an outgoing transaction expense
+    const amount = Math.round(rawVal * 100) * -1
+
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, amount, date })
+      })
+      if (!res.ok) throw new Error('Failed to record ad hoc item metadata')
+      window.location.reload()
+    } catch (err: any) {
+      alert(err.message)
+    }
   })
 </script>
