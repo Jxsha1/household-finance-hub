@@ -10,7 +10,6 @@ if (!db || !user) {
   return Astro.redirect('/login')
 }
 
-// Intercept timeline matrices parameter adjustments from request loops safely
 const url = Astro.url
 const currentYearObj = new Date().getFullYear()
 const currentMonthObj = new Date().getMonth()
@@ -23,14 +22,13 @@ const filterStart = `${selectedYear}-${targetMonthStr}-01`
 const filterEnd = `${selectedYear}-${targetMonthStr}-31`
 
 const [transactionsResult, recurringResult] = await Promise.all([
-  db.prepare('SELECT id, description, amount, date FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC').bind(user.householdId, filterStart, filterEnd).all(),
+  db.prepare('SELECT id, description, amount, date, bank_name FROM transactions WHERE household_id = ? AND date >= ? AND date <= ? ORDER BY date DESC').bind(user.householdId, filterStart, filterEnd).all(),
   db.prepare('SELECT name, amount, direction, bank_name FROM recurring_payments WHERE household_id = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)').bind(user.householdId, filterEnd, filterStart).all()
 ])
 
 const transactions = (transactionsResult?.results as any[]) || []
 const activeBills = (recurringResult?.results as any[]) || []
 
-// Compute asset liquidity and funding limits grouped across separate bank wrappers
 const accountBreakdown: Record<string, { needed: number; income: number }> = {}
 let totalBillsCostPence = 0
 let totalExpectedIncomePence = 0
@@ -49,13 +47,17 @@ activeBills.forEach(b => {
 })
 
 let oneOffSpendPence = 0
+let oneOffIncomePence = 0
+
 transactions.forEach(t => {
   if (t.amount < 0) {
     oneOffSpendPence += Math.abs(t.amount)
+  } else {
+    oneOffIncomePence += t.amount
   }
 })
 
-const residualSurplusValue = ((totalExpectedIncomePence - totalBillsCostPence - oneOffSpendPence) / 100).toFixed(2)
+const residualSurplusValue = ((totalExpectedIncomePence + oneOffIncomePence - totalBillsCostPence - oneOffSpendPence) / 100).toFixed(2)
 
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -64,18 +66,16 @@ const monthNames = [
 ---
 
 <MainLayout title="Dashboard Balance Overview">
-  <div class="space-y-5">
+  <div class="space-y-5 pb-8">
     
-    <!-- Timeline Navigation Loop Header Controls -->
     <div class="bg-white border border-slate-100 p-3 rounded-2xl flex items-center justify-between shadow-sm">
-      <button id="prev-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">← Previous Month</button>
-      <span class="text-xs font-black text-slate-700 uppercase tracking-wider px-4" id="current-period-lbl" data-m={selectedMonth} data-y={selectedYear}>
+      <button id="prev-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">← Prev</button>
+      <span class="text-xs font-black text-slate-700 uppercase tracking-wider px-4 text-center" id="current-period-lbl" data-m={selectedMonth} data-y={selectedYear}>
         {monthNames[selectedMonth]} {selectedYear}
       </span>
-      <button id="next-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">Next Month →</button>
+      <button id="next-month-btn" class="p-2 text-xs font-bold text-sky-700 bg-sky-50 rounded-xl hover:bg-sky-100 transition-colors">Next →</button>
     </div>
 
-    <!-- Capital Requirements Analysis Metrics Card -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card>
         <div class="mb-3">
@@ -101,30 +101,44 @@ const monthNames = [
       <Card className="flex flex-col justify-between">
         <div>
           <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Residual Balance Post Bills</h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">Estimated leftover capital following fixed monthly line item obligations</p>
+          <p class="text-[10px] text-slate-400 mt-0.5">Estimated leftover capital following fixed obligations and one-off logging</p>
         </div>
         <div class="py-4">
           <span class={`text-3xl font-black block tracking-tight ${parseFloat(residualSurplusValue) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             £{residualSurplusValue}
           </span>
         </div>
-        <div class="text-[10px] text-slate-400 border-t border-slate-100 pt-2 space-y-0.5">
-          <p>Fixed Commitments: £{(totalBillsCostPence / 100).toFixed(2)}</p>
-          <p>One-off Deductions: £{(oneOffSpendPence / 100).toFixed(2)}</p>
+        <div class="text-[10px] text-slate-400 border-t border-slate-100 pt-2 space-y-0.5 grid grid-cols-2">
+          <div>
+            <p>Fixed Out: £{(totalBillsCostPence / 100).toFixed(2)}</p>
+            <p>Ad Hoc Out: £{(oneOffSpendPence / 100).toFixed(2)}</p>
+          </div>
+          <div class="text-right">
+            <p>Fixed In: £{(totalExpectedIncomePence / 100).toFixed(2)}</p>
+            <p>Ad Hoc In: £{(oneOffIncomePence / 100).toFixed(2)}</p>
+          </div>
         </div>
       </Card>
     </div>
 
-    <!-- One-Off Payment Injection Field Form Wrapper Module -->
     <Card>
       <div class="mb-3">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Log One-Off Ad Hoc Expense</h4>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Log One-Off Payment</h4>
       </div>
-      <form id="one-off-spend-form" class="flex flex-col md:flex-row gap-3">
-        <input type="text" id="oneoff-desc" required placeholder="Expense Label (e.g. Weekly Shop)" class="flex-1 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
-        <input type="number" step="0.01" id="oneoff-amount" required placeholder="Amount (£)" class="w-full md:w-44 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
-        <input type="date" id="oneoff-date" required class="w-full md:w-44 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
-        <Button type="submit" variant="secondary" className="h-11 px-6">Record Spending</Button>
+      <form id="one-off-spend-form" class="flex flex-col gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input type="text" id="oneoff-desc" required placeholder="Payment Label (e.g. Weekly Shop)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+          <input type="text" id="oneoff-bank" required placeholder="Bank Account (e.g. Monzo)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <input type="number" step="0.01" id="oneoff-amount" required placeholder="Amount (£)" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+          <select id="oneoff-direction" class="h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none">
+            <option value="OUT">Money Out</option>
+            <option value="IN">Money In</option>
+          </select>
+          <input type="date" id="oneoff-date" required class="col-span-2 md:col-span-1 h-11 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 focus:outline-none" />
+        </div>
+        <Button type="submit" variant="secondary" className="h-11 mt-1">Record Payment</Button>
       </form>
     </Card>
 
@@ -137,13 +151,13 @@ const monthNames = [
       ) : (
         <div class="space-y-2">
           {transactions.map(t => (
-            <div class="flex justify-between items-center text-xs p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+            <div class="flex justify-between items-center text-xs p-3 bg-slate-50 rounded-xl border border-slate-100">
               <div>
                 <p class="font-bold text-slate-700">{t.description}</p>
-                <p class="text-[9px] text-slate-400">{t.date}</p>
+                <p class="text-[9px] text-slate-400">{t.bank_name || 'Unknown Bank'} · {t.date}</p>
               </div>
-              <span class="font-mono font-bold text-slate-600">
-                -£{(Math.abs(t.amount) / 100).toFixed(2)}
+              <span class={`font-mono font-bold ${t.amount >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                {t.amount >= 0 ? '+' : '-'}£{(Math.abs(t.amount) / 100).toFixed(2)}
               </span>
             </div>
           ))}
@@ -192,16 +206,17 @@ const monthNames = [
     e.preventDefault()
     const description = (document.getElementById('oneoff-desc') as HTMLInputElement).value
     const rawVal = parseFloat((document.getElementById('oneoff-amount') as HTMLInputElement).value)
+    const direction = (document.getElementById('oneoff-direction') as HTMLSelectElement).value
+    const bank_name = (document.getElementById('oneoff-bank') as HTMLInputElement).value
     const date = inlineDateBox.value
 
-    // Convert to a negative value to log it as an outgoing transaction expense
-    const amount = Math.round(rawVal * 100) * -1
+    const amount = direction === 'OUT' ? Math.round(rawVal * 100) * -1 : Math.round(rawVal * 100)
 
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, amount, date })
+        body: JSON.stringify({ description, amount, date, bank_name })
       })
       if (!res.ok) throw new Error('Failed to record ad hoc item metadata')
       window.location.reload()
